@@ -8,7 +8,6 @@ from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image, ImageTk
 
-# Определяем правильный путь для автономного .exe (включая распаковку во временную папку)
 if getattr(sys, "frozen", False):
   BASE_DIR = sys._MEIPASS
   CONFIG_DIR = os.path.dirname(sys.executable)
@@ -17,7 +16,6 @@ else:
   CONFIG_DIR = BASE_DIR
 
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-# Путь к папке с графикой
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
 
 
@@ -92,7 +90,6 @@ class ModernContractApp:
     self.root.geometry("850x1020")
     self.root.minsize(750, 700)
 
-    # Установка иконки приложения и панели задач из папки images
     try:
       self.root.iconbitmap(os.path.join(IMAGES_DIR, "logo.ico"))
     except Exception:
@@ -142,11 +139,7 @@ class ModernContractApp:
       self.apply_theme("dark")
 
   def update_logo(self, theme_name):
-    if theme_name == "dark":
-      logo_filename = "logo_dark.png"
-    else:
-      logo_filename = "logo_light.png"
-
+    logo_filename = "logo_dark.png" if theme_name == "dark" else "logo_light.png"
     path = os.path.join(IMAGES_DIR, logo_filename)
     if not os.path.exists(path):
       path = os.path.join(IMAGES_DIR, "logo.png")
@@ -223,6 +216,15 @@ class ModernContractApp:
         foreground=[("active", header_color)],
     )
 
+  def toggle_client_type(self):
+    ctype = self.client_type_var.get()
+    if ctype == "fiz":
+      self.fiz_frame.grid()
+      self.ur_frame.grid_remove()
+    else:
+      self.fiz_frame.grid_remove()
+      self.ur_frame.grid()
+
   def create_form_elements(self):
     form = self.scrollable_frame
     row = 0
@@ -283,12 +285,23 @@ class ModernContractApp:
       sep.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 10))
       row += 1
 
-    def add_field(label_text, default=""):
+    def add_field(parent, label_text, default=""):
+      lbl = ttk.Label(parent, text=label_text)
+      lbl.pack(anchor="w", padx=5, pady=2)
+      self.labels.append(lbl)
+
+      ent = tk.Entry(parent, width=50, font=("Segoe UI", 10), relief="flat")
+      ent.pack(anchor="w", padx=5, pady=2, ipady=3)
+      if default:
+        ent.insert(0, default)
+      self.entries.append(ent)
+      return ent
+
+    def add_global_field(label_text, default=""):
       nonlocal row
       lbl = ttk.Label(form, text=label_text)
       lbl.grid(row=row, column=0, sticky="w", padx=5, pady=4)
       self.labels.append(lbl)
-
       ent = tk.Entry(form, width=45, font=("Segoe UI", 10), relief="flat")
       ent.grid(row=row, column=1, sticky="w", padx=5, pady=4, ipady=4)
       if default:
@@ -298,12 +311,40 @@ class ModernContractApp:
       return ent
 
     add_section_header("1. Основные данные договора")
-    self.e_contract_num = add_field("Номер договора:")
+    self.e_contract_num = add_global_field("Номер договора:")
     today_str = datetime.date.today().strftime("%d.%m.%Y")
-    self.e_contract_date = add_field("Дата договора (ДД.ММ.ГГГГ):", today_str)
+    self.e_contract_date = add_global_field(
+        "Дата договора (ДД.ММ.ГГГГ):", today_str
+    )
 
-    add_section_header("2. Папка для сохранения документов")
+    add_section_header("2. Тип покупателя")
+    self.client_type_var = tk.StringVar(value="fiz")
 
+    type_frame = ttk.Frame(form)
+    type_frame.grid(
+        row=row, column=0, columnspan=2, sticky="w", padx=5, pady=5
+    )
+    row += 1
+
+    r_fiz = ttk.Radiobutton(
+        type_frame,
+        text="Физическое лицо",
+        variable=self.client_type_var,
+        value="fiz",
+        command=self.toggle_client_type,
+    )
+    r_fiz.pack(side="left", padx=(0, 20))
+
+    r_ur = ttk.Radiobutton(
+        type_frame,
+        text="Юридическое лицо (ООО, АО и др.)",
+        variable=self.client_type_var,
+        value="ur",
+        command=self.toggle_client_type,
+    )
+    r_ur.pack(side="left")
+
+    add_section_header("3. Папка для сохранения документов")
     dir_default_frame = ttk.Frame(form)
     dir_default_frame.grid(
         row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2
@@ -350,17 +391,60 @@ class ModernContractApp:
     )
     btn_choose_dir.pack(side="left")
 
-    add_section_header("3. Двигатель и автомобиль")
-    self.e_engine_model = add_field("Модель двигателя:")
-    self.e_engine_num = add_field("Номер двигателя:")
-    self.e_car_brand = add_field("Марка машины:")
-    self.e_car_model = add_field("Модель автомобиля:")
-    self.e_car_gosnum = add_field("Госномер:")
+    add_section_header("4. Данные покупателя")
 
-    add_section_header("4. Стоимость товара")
-    self.e_price = add_field("Стоимость (цифрами, например 120000):")
+    self.buyer_container = ttk.Frame(form)
+    self.buyer_container.grid(
+        row=row, column=0, columnspan=2, sticky="nsew", padx=0, pady=0
+    )
+    row += 1
 
-    add_section_header("5. Условия гарантии и установки")
+    # Фрейм физ. лица
+    self.fiz_frame = ttk.Frame(self.buyer_container)
+    self.fiz_frame.pack(fill="both", expand=True)
+
+    self.e_fio = add_field(self.fiz_frame, "Фамилия Имя Отчество:")
+    self.e_passport_series = add_field(
+        self.fiz_frame, "Серия паспорта (4 цифры):"
+    )
+    self.e_passport_num = add_field(self.fiz_frame, "Номер паспорта (6 цифр):")
+    self.e_passport_issued = add_field(self.fiz_frame, "Кем выдан:")
+    self.e_passport_code = add_field(self.fiz_frame, "Код подразделения:")
+    self.e_inn_fiz = add_field(self.fiz_frame, "ИНН клиента (12 цифр):")
+    self.e_address = add_field(self.fiz_frame, "Адрес прописки:")
+
+    # Фрейм юр. лица
+    self.ur_frame = ttk.Frame(self.buyer_container)
+
+    self.e_org_name = add_field(
+        self.ur_frame, "Название организации (ООО, АО и т.д.):"
+    )
+    self.e_director = add_field(
+        self.ur_frame, "Генеральный директор (ФИО полностью):"
+    )
+    self.e_rs = add_field(self.ur_frame, "Расчетный счет (р/с):")
+    self.e_ks = add_field(self.ur_frame, "Корреспондентский счет (к/с):")
+    self.e_bik = add_field(self.ur_frame, "БИК банка:")
+    self.e_bank = add_field(self.ur_frame, "Наименование банка:")
+    self.e_inn_ur = add_field(self.ur_frame, "ИНН организации:")
+    self.e_kpp = add_field(self.ur_frame, "КПП организации:")
+    self.e_legal_address = add_field(self.ur_frame, "Юридический адрес:")
+    self.e_phone = add_field(self.ur_frame, "Телефон:")
+    self.e_email = add_field(self.ur_frame, "E-mail:")
+
+    self.ur_frame.pack_forget()
+
+    add_section_header("5. Двигатель и автомобиль")
+    self.e_engine_model = add_global_field("Модель двигателя:")
+    self.e_engine_num = add_global_field("Номер двигателя:")
+    self.e_car_brand = add_global_field("Марка машины:")
+    self.e_car_model = add_global_field("Модель автомобиля:")
+    self.e_car_gosnum = add_global_field("Госномер:")
+
+    add_section_header("6. Стоимость товара")
+    self.e_price = add_global_field("Стоимость (цифрами, например 120000):")
+
+    add_section_header("7. Условия гарантии и установки")
     self.service_var = tk.StringVar(value="our")
 
     r1 = ttk.Radiobutton(
@@ -382,15 +466,6 @@ class ModernContractApp:
     )
     r2.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
     row += 1
-
-    add_section_header("6. Данные покупателя (Паспортные данные и адрес)")
-    self.e_fio = add_field("Фамилия Имя Отчество:")
-    self.e_passport_series = add_field("Серия паспорта (4 цифры):")
-    self.e_passport_num = add_field("Номер паспорта (6 цифр):")
-    self.e_passport_issued = add_field("Кем выдан:")
-    self.e_passport_code = add_field("Код подразделения:")
-    self.e_inn = add_field("ИНН клиента (12 цифр):")
-    self.e_address = add_field("Адрес прописки:")
 
     btn_frame = ttk.Frame(form)
     btn_frame.grid(row=row, column=0, columnspan=2, pady=25)
@@ -434,58 +509,28 @@ class ModernContractApp:
       self.lbl_custom_dir.config(text=f"Папка: {display_path}", fg=header_color)
 
   def validate_and_collect_data(self):
-    series = self.e_passport_series.get().strip()
-    number = self.e_passport_num.get().strip()
-    inn = self.e_inn.get().strip()
-
-    if series and (not series.isdigit() or len(series) != 4):
-      messagebox.showerror(
-          "Ошибка в паспорте",
-          (
-              "Если серия паспорта указана, она должна состоять ровно из 4"
-              f" цифр!\nВы ввели: '{series}'"
-          ),
-      )
-      return None
-
-    if number and (not number.isdigit() or len(number) != 6):
-      messagebox.showerror(
-          "Ошибка в паспорте",
-          (
-              "Если номер паспорта указан, он должен состоять ровно из 6"
-              f" цифр!\nВы ввели: '{number}'"
-          ),
-      )
-      return None
-
-    if inn and (not inn.isdigit() or len(inn) != 12):
-      messagebox.showerror(
-          "Ошибка в ИНН",
-          (
-              "Если ИНН указан, он должен состоять ровно из 12 цифр!\nВы ввели:"
-              f" '{inn}'"
-          ),
-      )
-      return None
-
+    ctype = self.client_type_var.get()
     price_val = self.e_price.get().strip()
     price_words = number_to_words_ru(price_val)
-
     raw_date = self.e_contract_date.get().strip()
     formatted_date = format_date_with_month_name(raw_date)
 
     if self.service_var.get() == "our":
-      g_months = "6"
-      g_months_words = "шесть"
-      g_km = "30 000"
-      g_km_words = "тридцать тысяч"
-      g_place = "в сертифицированном сервисе Продавца"
+      g_months, g_months_words, g_km, g_km_words, g_place = (
+          "6",
+          "шесть",
+          "30 000",
+          "тридцать тысяч",
+          "в сертифицированном сервисе Продавца",
+      )
     else:
-      g_months = "3"
-      g_months_words = "три"
-      g_km = "20 000"
-      g_km_words = "двадцать тысяч"
-      g_place = "в стороннем автосервисе"
+      g_months, g_months_words, g_km, g_km_words, g_place = (
+          "3",
+          "три",
+          "20 000",
+          "двадцать тысяч",
+          "в стороннем автосервисе",
+      )
 
     data = {
         "contract_num": self.e_contract_num.get().strip(),
@@ -502,31 +547,68 @@ class ModernContractApp:
         "warranty_km": g_km,
         "warranty_km_words": g_km_words,
         "warranty_place": g_place,
-        "fio": self.e_fio.get().strip(),
-        "passport_series": series,
-        "passport_num": number,
-        "passport_issued": self.e_passport_issued.get().strip(),
-        "passport_code": self.e_passport_code.get().strip(),
-        "inn": inn,
-        "address": self.e_address.get().strip(),
         "quantity": "1",
+        "client_type": ctype,
     }
+
+    if ctype == "fiz":
+      series = self.e_passport_series.get().strip()
+      number = self.e_passport_num.get().strip()
+      inn = self.e_inn_fiz.get().strip()
+
+      if series and (not series.isdigit() or len(series) != 4):
+        messagebox.showerror(
+            "Ошибка в паспорте", "Серия паспорта должна состоять из 4 цифр!"
+        )
+        return None
+      if number and (not number.isdigit() or len(number) != 6):
+        messagebox.showerror(
+            "Ошибка в паспорте", "Номер паспорта должен состоять из 6 цифр!"
+        )
+        return None
+
+      data.update({
+          "fio": self.e_fio.get().strip(),
+          "passport_series": series,
+          "passport_num": number,
+          "passport_issued": self.e_passport_issued.get().strip(),
+          "passport_code": self.e_passport_code.get().strip(),
+          "inn": inn,
+          "address": self.e_address.get().strip(),
+      })
+    else:
+      data.update({
+          "org_name": self.e_org_name.get().strip(),
+          "director_fio": self.e_director.get().strip(),
+          "rs": self.e_rs.get().strip(),
+          "ks": self.e_ks.get().strip(),
+          "bik": self.e_bik.get().strip(),
+          "bank": self.e_bank.get().strip(),
+          "inn": self.e_inn_ur.get().strip(),
+          "kpp": self.e_kpp.get().strip(),
+          "legal_address": self.e_legal_address.get().strip(),
+          "phone": self.e_phone.get().strip(),
+          "email": self.e_email.get().strip(),
+      })
+
     return data
 
   def build_document(self):
-    template_path = os.path.join(BASE_DIR, "template.docx")
-    if not os.path.exists(template_path):
-      messagebox.showerror(
-          "Ошибка",
-          (
-              "Файл шаблона 'template.docx' не найден по пути:\n"
-              f"{template_path}\n\nПоложите шаблон в эту папку перед запуском."
-          ),
-      )
-      return None
-
     data = self.validate_and_collect_data()
     if not data:
+      return None
+
+    # Выбираем правильный шаблон в зависимости от типа клиента
+    if data["client_type"] == "fiz":
+      template_filename = "template_fiz.docx"
+    else:
+      template_filename = "template_ur.docx"
+
+    template_path = os.path.join(BASE_DIR, template_filename)
+    if not os.path.exists(template_path):
+      messagebox.showerror(
+          "Ошибка", f"Файл шаблона '{template_filename}' не найден по пути:\n{template_path}"
+      )
       return None
 
     try:
@@ -534,18 +616,21 @@ class ModernContractApp:
       doc.render(data)
 
       user_custom_dir = self.custom_output_dir.get()
-      if user_custom_dir:
-        output_dir = user_custom_dir
-      else:
-        output_dir = self.default_output_dir.get()
-
+      output_dir = (
+          user_custom_dir if user_custom_dir else self.default_output_dir.get()
+      )
       os.makedirs(output_dir, exist_ok=True)
 
       safe_num = data["contract_num"].replace("/", "_").replace("\\", "_")
-      if data["fio"]:
-        safe_fio = data["fio"].split()[0]
+      name_identifier = (
+          data.get("org_name")
+          if data["client_type"] == "ur"
+          else data.get("fio")
+      )
+      if name_identifier:
+        safe_name = name_identifier.split()[0]
         filename = os.path.join(
-            output_dir, f"Договор_{safe_num}_{safe_fio}.docx"
+            output_dir, f"Договор_{safe_num}_{safe_name}.docx"
         )
       else:
         filename = os.path.join(output_dir, f"Договор_{safe_num}.docx")
@@ -574,17 +659,10 @@ class ModernContractApp:
           )
         else:
           messagebox.showwarning(
-              "Внимание",
-              (
-                  "Автопечать поддерживается только на Windows.\nФайл сохранен:"
-                  f" {filename}"
-              ),
+              "Внимание", "Автопечать поддерживается только на Windows."
           )
       except Exception as e:
-        messagebox.showerror(
-            "Ошибка печати",
-            f"Не удалось отправить на печать автоматически: {e}",
-        )
+        messagebox.showerror("Ошибка печати", f"Не удалось отправить на печать: {e}")
 
 
 if __name__ == "__main__":
