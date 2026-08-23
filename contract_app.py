@@ -3,10 +3,20 @@ import json
 import os
 import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
+import customtkinter as ctk
 from docxtpl import DocxTemplate
 from num2words import num2words
-from PIL import Image, ImageTk
+from PIL import Image
+
+# Устанавливаем тему
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
+
+# Фирменный желтый цвет Factory Motors и оттенки для наведения
+BRAND_YELLOW = "#f1c40f"
+BRAND_YELLOW_HOVER = "#d4ac0d"
+TEXT_DARK = "#121212"
 
 if getattr(sys, "frozen", False):
   BASE_DIR = sys._MEIPASS
@@ -82,440 +92,415 @@ def format_date_with_month_name(date_str):
   return date_str
 
 
-class ModernContractApp:
+class ModernContractApp(ctk.CTk):
 
-  def __init__(self, root):
-    self.root = root
-    self.root.title("Factory Motors: Contract Hub")
-    self.root.geometry("850x1020")
-    self.root.minsize(750, 700)
+  def __init__(self):
+    super().__init__()
+
+    self.title("Factory Motors: Генератор Договоров")
+    self.geometry("900x950")
+    self.minsize(800, 700)
 
     try:
-      self.root.iconbitmap(os.path.join(IMAGES_DIR, "logo.ico"))
+      self.iconbitmap(os.path.join(IMAGES_DIR, "logo.ico"))
     except Exception:
       pass
 
-    self.current_theme = "dark"
-    self.default_output_dir = tk.StringVar(value=load_default_dir())
-    self.custom_output_dir = tk.StringVar(value="")
+    self.default_output_dir = ctk.StringVar(value=load_default_dir())
+    self.custom_output_dir = ctk.StringVar(value="")
 
-    container = ttk.Frame(root)
-    container.pack(fill="both", expand=True)
-
-    self.canvas = tk.Canvas(container, highlightthickness=0)
-    self.scrollbar = ttk.Scrollbar(
-        container, orient="vertical", command=self.canvas.yview
+    self.scroll_frame = ctk.CTkScrollableFrame(
+        self, corner_radius=0, fg_color="transparent"
     )
-    self.scrollable_frame = ttk.Frame(self.canvas, padding=20)
+    self.scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-    self.scrollable_frame.bind(
-        "<Configure>",
-        lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")),
-    )
+    self.create_header()
+    self.create_form_sections()
 
-    self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-    self.canvas.configure(yscrollcommand=self.scrollbar.set)
+  def create_header(self):
+    header_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+    header_frame.pack(fill="x", padx=10, pady=(10, 20))
 
-    self.canvas.pack(side="left", fill="both", expand=True)
-    self.scrollbar.pack(side="right", fill="y")
+    logo_path = os.path.join(IMAGES_DIR, "logo_dark.png")
+    if not os.path.exists(logo_path):
+      logo_path = os.path.join(IMAGES_DIR, "logo.png")
 
-    self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    self.entries = []
-    self.labels = []
-    self.headers = []
-    self.dir_labels = []
-
-    self.create_form_elements()
-    self.apply_theme("dark")
-
-  def _on_mousewheel(self, event):
-    self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-  def toggle_theme(self):
-    if self.current_theme == "dark":
-      self.apply_theme("light")
-    else:
-      self.apply_theme("dark")
-
-  def update_logo(self, theme_name):
-    logo_filename = "logo_dark.png" if theme_name == "dark" else "logo_light.png"
-    path = os.path.join(IMAGES_DIR, logo_filename)
-    if not os.path.exists(path):
-      path = os.path.join(IMAGES_DIR, "logo.png")
-
-    if os.path.exists(path):
+    if os.path.exists(logo_path):
       try:
-        img = Image.open(path)
-        img = img.resize((110, 110), Image.Resampling.LANCZOS)
-        self.logo_img = ImageTk.PhotoImage(img)
-        self.logo_lbl.config(image=self.logo_img)
+        pil_img = Image.open(logo_path)
+        self.logo_img = ctk.CTkImage(
+            light_image=pil_img, dark_image=pil_img, size=(70, 70)
+        )
+        logo_lbl = ctk.CTkLabel(header_frame, image=self.logo_img, text="")
+        logo_lbl.pack(side="left", padx=(0, 15))
       except Exception:
         pass
 
-  def apply_theme(self, theme_name):
-    self.current_theme = theme_name
+    title_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+    title_frame.pack(side="left", fill="y", expand=True)
 
-    if theme_name == "dark":
-      bg_color = "#121212"
-      fg_color = "#ffffff"
-      entry_bg = "#252525"
-      entry_fg = "#ffffff"
-      header_color = "#f1c40f"
-      dir_text_color = "#dddddd"
-      btn_text = "☀️ Светлая тема"
-    else:
-      bg_color = "#f5f6fa"
-      fg_color = "#2f3640"
-      entry_bg = "#ffffff"
-      entry_fg = "#2f3640"
-      header_color = "#e74c3c"
-      dir_text_color = "#555555"
-      btn_text = "🌙 Темная тема"
-
-    self.root.configure(bg=bg_color)
-    self.canvas.configure(bg=bg_color)
-
-    if hasattr(self, "theme_btn"):
-      self.theme_btn.config(text=btn_text)
-
-    self.update_logo(theme_name)
-
-    for lbl in self.labels:
-      lbl.config(background=bg_color, foreground=fg_color)
-
-    for lbl in self.headers:
-      lbl.config(background=bg_color, foreground=header_color)
-
-    for ent in self.entries:
-      ent.config(bg=entry_bg, fg=entry_fg, insertbackground=fg_color)
-
-    if hasattr(self, "lbl_brand"):
-      self.lbl_brand.config(bg=bg_color, fg=header_color)
-    if hasattr(self, "lbl_sub"):
-      self.lbl_sub.config(
-          bg=bg_color, fg="#888888" if theme_name == "dark" else "#555555"
-      )
-
-    for lbl in self.dir_labels:
-      lbl.config(bg=bg_color, fg=dir_text_color)
-
-    style = ttk.Style()
-    style.theme_use("clam")
-    style.configure("TFrame", background=bg_color)
-    style.configure("TLabel", background=bg_color, foreground=fg_color)
-    style.configure(
-        "TRadiobutton",
-        background=bg_color,
-        foreground=fg_color,
-        font=("Segoe UI", 10),
-    )
-    style.map(
-        "TRadiobutton",
-        background=[("active", bg_color)],
-        foreground=[("active", header_color)],
-    )
-
-  def toggle_client_type(self):
-    ctype = self.client_type_var.get()
-    if ctype == "fiz":
-      self.fiz_frame.grid()
-      self.ur_frame.grid_remove()
-    else:
-      self.fiz_frame.grid_remove()
-      self.ur_frame.grid()
-
-  def create_form_elements(self):
-    form = self.scrollable_frame
-    row = 0
-
-    self.header_frame = ttk.Frame(form)
-    self.header_frame.grid(
-        row=row, column=0, columnspan=2, sticky="ew", pady=(0, 15)
-    )
-    row += 1
-
-    self.logo_lbl = ttk.Label(self.header_frame)
-    self.logo_lbl.pack(side="left", padx=(0, 15))
-
-    self.title_frame = ttk.Frame(self.header_frame)
-    self.title_frame.pack(side="left", fill="y", expand=True)
-
-    self.lbl_brand = tk.Label(
-        self.title_frame,
+    lbl_brand = ctk.CTkLabel(
+        title_frame,
         text="FACTORY MOTORS",
-        font=("Segoe UI", 18, "bold"),
+        font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
+        text_color=BRAND_YELLOW,
     )
-    self.lbl_brand.pack(anchor="w")
+    lbl_brand.pack(anchor="w")
 
-    self.lbl_sub = tk.Label(
-        self.title_frame,
-        text="Система автоматического формирования договоров",
-        font=("Segoe UI", 10),
+    lbl_sub = ctk.CTkLabel(
+        title_frame,
+        text="Современная система формирования договоров",
+        font=ctk.CTkFont(family="Segoe UI", size=12),
     )
-    self.lbl_sub.pack(anchor="w", pady=(2, 0))
+    lbl_sub.pack(anchor="w", pady=(2, 0))
 
-    self.theme_btn = tk.Button(
-        self.header_frame,
-        text="☀️ Светлая тема",
-        font=("Segoe UI", 9, "bold"),
+    self.theme_btn = ctk.CTkButton(
+        header_frame,
+        text="🌙 Сменить тему",
+        width=140,
+        height=32,
+        font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+        fg_color="#333333",
+        hover_color="#444444",
+        text_color="#ffffff",
         command=self.toggle_theme,
-        relief="flat",
-        padx=10,
-        pady=5,
-        cursor="hand2",
-        bg="#333333",
-        fg="#ffffff",
     )
     self.theme_btn.pack(side="right", anchor="ne")
 
-    sep_top = ttk.Separator(form, orient="horizontal")
-    sep_top.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(5, 10))
-    row += 1
-
-    def add_section_header(title):
-      nonlocal row
-      lbl = tk.Label(
-          form, text=title, font=("Segoe UI", 11, "bold"), anchor="w"
+  def toggle_theme(self):
+    current = ctk.get_appearance_mode()
+    if current == "Dark":
+      ctk.set_appearance_mode("Light")
+      self.theme_btn.configure(
+          text="Тёмная тема",
+          fg_color="#e0e0e0",
+          hover_color="#cccccc",
+          text_color="#222222",
       )
-      lbl.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(15, 5))
-      self.headers.append(lbl)
-      row += 1
-      sep = ttk.Separator(form, orient="horizontal")
-      sep.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-      row += 1
+    else:
+      ctk.set_appearance_mode("Dark")
+      self.theme_btn.configure(
+          text="Светлая тема",
+          fg_color="#333333",
+          hover_color="#444444",
+          text_color="#ffffff",
+      )
 
-    def add_field(parent, label_text, default=""):
-      lbl = ttk.Label(parent, text=label_text)
-      lbl.pack(anchor="w", padx=5, pady=2)
-      self.labels.append(lbl)
+  def create_card(self, title_text):
+    card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
+    card.pack(fill="x", padx=10, pady=8)
 
-      ent = tk.Entry(parent, width=50, font=("Segoe UI", 10), relief="flat")
-      ent.pack(anchor="w", padx=5, pady=2, ipady=3)
-      if default:
-        ent.insert(0, default)
-      self.entries.append(ent)
-      return ent
+    title_lbl = ctk.CTkLabel(
+        card,
+        text=title_text,
+        font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+        text_color=BRAND_YELLOW,
+    )
+    title_lbl.pack(anchor="w", padx=15, pady=(12, 5))
 
-    def add_global_field(label_text, default=""):
-      nonlocal row
-      lbl = ttk.Label(form, text=label_text)
-      lbl.grid(row=row, column=0, sticky="w", padx=5, pady=4)
-      self.labels.append(lbl)
-      ent = tk.Entry(form, width=45, font=("Segoe UI", 10), relief="flat")
-      ent.grid(row=row, column=1, sticky="w", padx=5, pady=4, ipady=4)
-      if default:
-        ent.insert(0, default)
-      self.entries.append(ent)
-      row += 1
-      return ent
+    content_frame = ctk.CTkFrame(card, fg_color="transparent")
+    content_frame.pack(fill="x", padx=15, pady=(0, 12))
+    return content_frame
 
-    # 1. Основные данные
-    add_section_header("1. Основные данные договора")
-    self.e_contract_num = add_global_field("Номер договора:")
+  def create_form_sections(self):
+    # --- СЕКЦИЯ 1 ---
+    f1 = self.create_card("1. Основные данные договора")
+    f1.grid_columnconfigure((0, 1), weight=1)
+
+    ctk.CTkLabel(f1, text="Номер договора:").grid(
+        row=0, column=0, sticky="w", pady=2
+    )
+    self.e_contract_num = ctk.CTkEntry(
+        f1, placeholder_text="Например: 1337", height=32, border_color=BRAND_YELLOW
+    )
+    self.e_contract_num.grid(
+        row=1, column=0, sticky="ew", padx=(0, 10), pady=(0, 10)
+    )
+
+    ctk.CTkLabel(f1, text="Дата договора (ДД.ММ.ГГГГ):").grid(
+        row=0, column=1, sticky="w", pady=2
+    )
     today_str = datetime.date.today().strftime("%d.%m.%Y")
-    self.e_contract_date = add_global_field(
-        "Дата договора (ДД.ММ.ГГГГ):", today_str
+    self.e_contract_date = ctk.CTkEntry(
+        f1, height=32, border_color=BRAND_YELLOW
     )
+    self.e_contract_date.insert(0, today_str)
+    self.e_contract_date.grid(row=1, column=1, sticky="ew", pady=(0, 10))
 
-    # 2. Тип покупателя
-    add_section_header("2. Тип покупателя")
-    self.client_type_var = tk.StringVar(value="fiz")
+    # --- СЕКЦИЯ 2 ---
+    f2 = self.create_card("2. Тип покупателя")
+    self.client_type_var = ctk.StringVar(value="fiz")
 
-    type_frame = ttk.Frame(form)
-    type_frame.grid(
-        row=row, column=0, columnspan=2, sticky="w", padx=5, pady=5
-    )
-    row += 1
+    type_frame = ctk.CTkFrame(f2, fg_color="transparent")
+    type_frame.pack(fill="x", pady=5)
 
-    r_fiz = ttk.Radiobutton(
+    r_fiz = ctk.CTkRadioButton(
         type_frame,
         text="Физическое лицо",
         variable=self.client_type_var,
         value="fiz",
         command=self.toggle_client_type,
+        border_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        fg_color=BRAND_YELLOW,
     )
-    r_fiz.pack(side="left", padx=(0, 20))
+    r_fiz.pack(side="left", padx=(0, 30))
 
-    r_ur = ttk.Radiobutton(
+    r_ur = ctk.CTkRadioButton(
         type_frame,
-        text="Юридическое лицо (ООО, АО и др.)",
+        text="Юридическое лицо (ООО, АО)",
         variable=self.client_type_var,
         value="ur",
         command=self.toggle_client_type,
+        border_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        fg_color=BRAND_YELLOW,
     )
     r_ur.pack(side="left")
 
-    # 3. Данные покупателя
-    add_section_header("3. Данные покупателя")
+    # --- СЕКЦИЯ 3 ---
+    self.card_buyer = self.create_card("3. Данные покупателя")
 
-    self.buyer_container = ttk.Frame(form)
-    self.buyer_container.grid(
-        row=row, column=0, columnspan=2, sticky="nsew", padx=0, pady=0
+    self.fiz_frame = ctk.CTkFrame(self.card_buyer, fg_color="transparent")
+    self.fiz_frame.pack(fill="x", expand=True)
+
+    def add_f_entry(parent, label, placeholder=""):
+      ctk.CTkLabel(parent, text=label).pack(anchor="w", pady=(4, 2))
+      ent = ctk.CTkEntry(
+          parent,
+          placeholder_text=placeholder,
+          height=32,
+          border_color=BRAND_YELLOW,
+      )
+      ent.pack(fill="x", pady=(0, 8))
+      return ent
+
+    self.e_fio = add_f_entry(
+        self.fiz_frame, "Фамилия Имя Отчество:", "Иванов Иван Иванович"
     )
-    row += 1
 
-    # Фрейм физ. лица
-    self.fiz_frame = ttk.Frame(self.buyer_container)
-    self.fiz_frame.pack(fill="both", expand=True)
+    row_p = ctk.CTkFrame(self.fiz_frame, fg_color="transparent")
+    row_p.pack(fill="x", pady=(0, 8))
+    row_p.grid_columnconfigure((0, 1, 2), weight=1)
 
-    self.e_fio = add_field(self.fiz_frame, "Фамилия Имя Отчество:")
-    self.e_passport_series = add_field(
-        self.fiz_frame, "Серия паспорта (4 цифры):"
+    ctk.CTkLabel(row_p, text="Серия (4 цифр):").grid(row=0, column=0, sticky="w")
+    self.e_passport_series = ctk.CTkEntry(
+        row_p, height=32, border_color=BRAND_YELLOW
     )
-    self.e_passport_num = add_field(self.fiz_frame, "Номер паспорта (6 цифр):")
-    self.e_passport_issued = add_field(self.fiz_frame, "Кем выдан:")
-    self.e_passport_code = add_field(self.fiz_frame, "Код подразделения:")
-    self.e_inn_fiz = add_field(self.fiz_frame, "ИНН клиента (12 цифр):")
-    self.e_address = add_field(self.fiz_frame, "Адрес прописки:")
+    self.e_passport_series.grid(row=1, column=0, sticky="ew", padx=(0, 5))
 
-    # Фрейм юр. лица
-    self.ur_frame = ttk.Frame(self.buyer_container)
-
-    self.e_org_name = add_field(
-        self.ur_frame, "Название организации (ООО, АО и т.д.):"
+    ctk.CTkLabel(row_p, text="Номер (6 цифр):").grid(row=0, column=1, sticky="w")
+    self.e_passport_num = ctk.CTkEntry(
+        row_p, height=32, border_color=BRAND_YELLOW
     )
-    self.e_director = add_field(
+    self.e_passport_num.grid(row=1, column=1, sticky="ew", padx=5)
+
+    ctk.CTkLabel(row_p, text="ИНН (12 цифр):").grid(row=0, column=2, sticky="w")
+    self.e_inn_fiz = ctk.CTkEntry(row_p, height=32, border_color=BRAND_YELLOW)
+    self.e_inn_fiz.grid(row=1, column=2, sticky="ew", padx=(5, 0))
+
+    self.e_passport_issued = add_f_entry(self.fiz_frame, "Кем выдан паспорт:")
+    self.e_passport_code = add_f_entry(self.fiz_frame, "Код подразделения:")
+    self.e_address = add_f_entry(self.fiz_frame, "Адрес прописки:")
+
+    self.ur_frame = ctk.CTkFrame(self.card_buyer, fg_color="transparent")
+    self.e_org_name = add_f_entry(
+        self.ur_frame, "Название организации (ООО, АО и т.д.):", "ООО «Компания»"
+    )
+    self.e_director = add_f_entry(
         self.ur_frame, "Генеральный директор (ФИО полностью):"
     )
-    self.e_rs = add_field(self.ur_frame, "Расчетный счет (р/с):")
-    self.e_ks = add_field(self.ur_frame, "Корреспондентский счет (к/с):")
-    self.e_bik = add_field(self.ur_frame, "БИК банка:")
-    self.e_bank = add_field(self.ur_frame, "Наименование банка:")
-    self.e_inn_ur = add_field(self.ur_frame, "ИНН организации:")
-    self.e_kpp = add_field(self.ur_frame, "КПП организации:")
-    self.e_legal_address = add_field(self.ur_frame, "Юридический адрес:")
-    self.e_phone = add_field(self.ur_frame, "Телефон:")
-    self.e_email = add_field(self.ur_frame, "E-mail:")
+
+    row_b = ctk.CTkFrame(self.ur_frame, fg_color="transparent")
+    row_b.pack(fill="x", pady=(0, 8))
+    row_b.grid_columnconfigure((0, 1), weight=1)
+
+    ctk.CTkLabel(row_b, text="Расчетный счет (р/с):").grid(
+        row=0, column=0, sticky="w"
+    )
+    self.e_rs = ctk.CTkEntry(row_b, height=32, border_color=BRAND_YELLOW)
+    self.e_rs.grid(row=1, column=0, sticky="ew", padx=(0, 5))
+
+    ctk.CTkLabel(row_b, text="Корр. счет (к/с):").grid(
+        row=0, column=1, sticky="w"
+    )
+    self.e_ks = ctk.CTkEntry(row_b, height=32, border_color=BRAND_YELLOW)
+    self.e_ks.grid(row=1, column=1, sticky="ew", padx=(5, 0))
+
+    row_b2 = ctk.CTkFrame(self.ur_frame, fg_color="transparent")
+    row_b2.pack(fill="x", pady=(0, 8))
+    row_b2.grid_columnconfigure((0, 1, 2), weight=1)
+
+    ctk.CTkLabel(row_b2, text="БИК банка:").grid(row=0, column=0, sticky="w")
+    self.e_bik = ctk.CTkEntry(row_b2, height=32, border_color=BRAND_YELLOW)
+    self.e_bik.grid(row=1, column=0, sticky="ew", padx=(0, 5))
+
+    ctk.CTkLabel(row_b2, text="ИНН организации:").grid(
+        row=0, column=1, sticky="w"
+    )
+    self.e_inn_ur = ctk.CTkEntry(row_b2, height=32, border_color=BRAND_YELLOW)
+    self.e_inn_ur.grid(row=1, column=1, sticky="ew", padx=5)
+
+    ctk.CTkLabel(row_b2, text="КПП организации:").grid(
+        row=0, column=2, sticky="w"
+    )
+    self.e_kpp = ctk.CTkEntry(row_b2, height=32, border_color=BRAND_YELLOW)
+    self.e_kpp.grid(row=1, column=2, sticky="ew", padx=(5, 0))
+
+    self.e_bank = add_f_entry(self.ur_frame, "Наименование банка:")
+    self.e_legal_address = add_f_entry(self.ur_frame, "Юридический адрес:")
+
+    row_c = ctk.CTkFrame(self.ur_frame, fg_color="transparent")
+    row_c.pack(fill="x", pady=(0, 8))
+    row_c.grid_columnconfigure((0, 1), weight=1)
+
+    ctk.CTkLabel(row_c, text="Телефон:").grid(row=0, column=0, sticky="w")
+    self.e_phone = ctk.CTkEntry(row_c, height=32, border_color=BRAND_YELLOW)
+    self.e_phone.grid(row=1, column=0, sticky="ew", padx=(0, 5))
+
+    ctk.CTkLabel(row_c, text="E-mail:").grid(row=0, column=1, sticky="w")
+    self.e_email = ctk.CTkEntry(row_c, height=32, border_color=BRAND_YELLOW)
+    self.e_email.grid(row=1, column=1, sticky="ew", padx=(5, 0))
 
     self.ur_frame.pack_forget()
 
-    # 4. Двигатель и автомобиль
-    add_section_header("4. Двигатель и автомобиль")
-    self.e_engine_model = add_global_field("Модель двигателя:")
-    self.e_engine_num = add_global_field("Номер двигателя:")
-    self.e_car_brand = add_global_field("Марка машины:")
-    self.e_car_model = add_global_field("Модель автомобиля:")
-    self.e_car_gosnum = add_global_field("Госномер:")
+    # --- СЕКЦИЯ 4 ---
+    f4 = self.create_card("4. Двигатель и автомобиль")
+    f4.grid_columnconfigure((0, 1), weight=1)
 
-    # 5. Стоимость товара
-    add_section_header("5. Стоимость товара")
-    self.e_price = add_global_field("Стоимость (цифрами, например 120000):")
+    ctk.CTkLabel(f4, text="Модель двигателя:").grid(row=0, column=0, sticky="w")
+    self.e_engine_model = ctk.CTkEntry(
+        f4, height=32, border_color=BRAND_YELLOW
+    )
+    self.e_engine_model.grid(
+        row=1, column=0, sticky="ew", padx=(0, 10), pady=(0, 8)
+    )
 
-    # 6. Условия гарантии
-    add_section_header("6. Условия гарантии и установки")
-    self.service_var = tk.StringVar(value="our")
+    ctk.CTkLabel(f4, text="Номер двигателя:").grid(row=0, column=1, sticky="w")
+    self.e_engine_num = ctk.CTkEntry(f4, height=32, border_color=BRAND_YELLOW)
+    self.e_engine_num.grid(row=1, column=1, sticky="ew", pady=(0, 8))
 
-    r1 = ttk.Radiobutton(
-        form,
+    ctk.CTkLabel(f4, text="Марка машины:").grid(row=2, column=0, sticky="w")
+    self.e_car_brand = ctk.CTkEntry(f4, height=32, border_color=BRAND_YELLOW)
+    self.e_car_brand.grid(
+        row=3, column=0, sticky="ew", padx=(0, 10), pady=(0, 8)
+    )
+
+    ctk.CTkLabel(f4, text="Модель автомобиля:").grid(row=2, column=1, sticky="w")
+    self.e_car_model = ctk.CTkEntry(f4, height=32, border_color=BRAND_YELLOW)
+    self.e_car_model.grid(row=3, column=1, sticky="ew", pady=(0, 8))
+
+    ctk.CTkLabel(f4, text="Госномер:").grid(row=4, column=0, sticky="w")
+    self.e_car_gosnum = ctk.CTkEntry(f4, height=32, border_color=BRAND_YELLOW)
+    self.e_car_gosnum.grid(row=5, column=0, sticky="ew", padx=(0, 10))
+
+    # --- СЕКЦИЯ 5 ---
+    f5 = self.create_card("5. Стоимость товара")
+    ctk.CTkLabel(f5, text="Стоимость (цифрами, например 120000):").pack(
+        anchor="w", pady=(0, 2)
+    )
+    self.e_price = ctk.CTkEntry(f5, height=32, border_color=BRAND_YELLOW)
+    self.e_price.pack(fill="x", pady=(0, 5))
+
+    # --- СЕКЦИЯ 6 ---
+    f6 = self.create_card("6. Условия гарантии и установки")
+    self.service_var = ctk.StringVar(value="our")
+
+    ctk.CTkRadioButton(
+        f6,
         text="Установка в нашем сервисе (Гарантия 6 месяцев или 30 000 км)",
         variable=self.service_var,
         value="our",
-    )
-    r1.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
-    row += 1
-
-    r2 = ttk.Radiobutton(
-        form,
-        text=(
-            "Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)"
-        ),
+        border_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        fg_color=BRAND_YELLOW,
+    ).pack(anchor="w", pady=3)
+    ctk.CTkRadioButton(
+        f6,
+        text="Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)",
         variable=self.service_var,
         value="other",
-    )
-    r2.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
-    row += 1
+        border_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        fg_color=BRAND_YELLOW,
+    ).pack(anchor="w", pady=3)
 
-    # 7. Папка для сохранения документов (теперь в самом конце перед кнопками)
-    add_section_header("7. Папка для сохранения документов")
-
-    dir_default_frame = ttk.Frame(form)
-    dir_default_frame.grid(
-        row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2
-    )
-    row += 1
+    # --- СЕКЦИЯ 7 ---
+    f7 = self.create_card("7. Папка для сохранения документов")
+    dir_row = ctk.CTkFrame(f7, fg_color="transparent")
+    dir_row.pack(fill="x", pady=5)
 
     curr_default = self.default_output_dir.get()
     short_default = (
-        curr_default if len(curr_default) < 45 else "..." + curr_default[-42:]
+        curr_default if len(curr_default) < 50 else "..." + curr_default[-47:]
     )
-    self.lbl_default_dir = tk.Label(
-        dir_default_frame,
-        text=f"По умолчанию: {short_default}",
-        font=("Segoe UI", 9),
-    )
-    self.lbl_default_dir.pack(side="left", padx=(0, 10))
-    self.dir_labels.append(self.lbl_default_dir)
 
-    btn_set_default = ttk.Button(
-        dir_default_frame,
-        text="⚙️ Изменить папку по умолчанию",
+    self.lbl_default_dir = ctk.CTkLabel(
+        dir_row, text=f"По умолчанию: {short_default}"
+    )
+    self.lbl_default_dir.pack(side="left", padx=(0, 15))
+
+    btn_set_default = ctk.CTkButton(
+        dir_row,
+        text="⚙️ Изменить папку",
+        width=140,
+        height=30,
+        fg_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        text_color=TEXT_DARK,
+        font=ctk.CTkFont(weight="bold"),
         command=self.change_default_directory,
     )
     btn_set_default.pack(side="left")
 
-    dir_custom_frame = ttk.Frame(form)
-    dir_custom_frame.grid(
-        row=row, column=0, columnspan=2, sticky="w", padx=5, pady=4
-    )
-    row += 1
+    # ЖЕЛТЫЕ КНОПКИ ДЕЙСТВИЙ ВНИЗУ
+    btn_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
+    btn_frame.pack(fill="x", padx=10, pady=20)
+    btn_frame.grid_columnconfigure((0, 1), weight=1)
 
-    self.lbl_custom_dir = tk.Label(
-        dir_custom_frame,
-        text="Папка для этого договора: (не выбрана, по умолчанию)",
-        font=("Segoe UI", 9, "italic"),
+    save_btn = ctk.CTkButton(
+        btn_frame,
+        text="💾 Сохранить договор",
+        height=45,
+        font=ctk.CTkFont(size=14, weight="bold"),
+        fg_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        text_color=TEXT_DARK,
+        command=self.generate_doc,
     )
-    self.lbl_custom_dir.pack(side="left", padx=(0, 10))
-    self.dir_labels.append(self.lbl_custom_dir)
+    save_btn.grid(row=0, column=0, sticky="ew", padx=(0, 10))
 
-    btn_choose_dir = ttk.Button(
-        dir_custom_frame,
-        text="📁 Выбрать другую...",
-        command=self.choose_custom_directory,
+    print_btn = ctk.CTkButton(
+        btn_frame,
+        text="🖨️ Сохранить и на печать",
+        height=45,
+        font=ctk.CTkFont(size=14, weight="bold"),
+        fg_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        text_color=TEXT_DARK,
+        command=self.print_doc,
     )
-    btn_choose_dir.pack(side="left")
+    print_btn.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
-    # Кнопки
-    btn_frame = ttk.Frame(form)
-    btn_frame.grid(row=row, column=0, columnspan=2, pady=25)
-
-    save_btn = ttk.Button(
-        btn_frame, text="💾 Сохранить договор", command=self.generate_doc
-    )
-    save_btn.pack(side="left", padx=10)
-
-    print_btn = ttk.Button(
-        btn_frame, text="🖨️ Сохранить и на печать", command=self.print_doc
-    )
-    print_btn.pack(side="left", padx=10)
+  def toggle_client_type(self):
+    ctype = self.client_type_var.get()
+    if ctype == "fiz":
+      self.ur_frame.pack_forget()
+      self.fiz_frame.pack(fill="x", expand=True)
+    else:
+      self.fiz_frame.pack_forget()
+      self.ur_frame.pack(fill="x", expand=True)
 
   def change_default_directory(self):
     new_dir = filedialog.askdirectory(title="Выберите новую папку по умолчанию")
     if new_dir:
       self.default_output_dir.set(new_dir)
       save_default_dir(new_dir)
-      short_path = (
-          new_dir if len(new_dir) < 45 else "..." + new_dir[-42:]
-      )
-      header_color = "#f1c40f" if self.current_theme == "dark" else "#e74c3c"
-      self.lbl_default_dir.config(
-          text=f"По умолчанию: {short_path}", fg=header_color
-      )
+      short_path = new_dir if len(new_dir) < 50 else "..." + new_dir[-47:]
+      self.lbl_default_dir.configure(text=f"По умолчанию: {short_path}")
       messagebox.showinfo(
           "Успех", f"Папка по умолчанию успешно изменена на:\n{new_dir}"
       )
-
-  def choose_custom_directory(self):
-    chosen_dir = filedialog.askdirectory(
-        title="Выберите папку для этого договора"
-    )
-    if chosen_dir:
-      self.custom_output_dir.set(chosen_dir)
-      display_path = (
-          chosen_dir if len(chosen_dir) < 40 else "..." + chosen_dir[-37:]
-      )
-      header_color = "#f1c40f" if self.current_theme == "dark" else "#e74c3c"
-      self.lbl_custom_dir.config(text=f"Папка: {display_path}", fg=header_color)
 
   def validate_and_collect_data(self):
     ctype = self.client_type_var.get()
@@ -607,15 +592,18 @@ class ModernContractApp:
     if not data:
       return None
 
-    if data["client_type"] == "fiz":
-      template_filename = "template_fiz.docx"
-    else:
-      template_filename = "template_ur.docx"
-
+    template_filename = (
+        "template_fiz.docx" if data["client_type"] == "fiz" else "template_ur.docx"
+    )
     template_path = os.path.join(BASE_DIR, template_filename)
+
     if not os.path.exists(template_path):
       messagebox.showerror(
-          "Ошибка", f"Файл шаблона '{template_filename}' не найден по пути:\n{template_path}"
+          "Ошибка",
+          (
+              f"Файл шаблона '{template_filename}' не найден по пути:\n"
+              f"{template_path}"
+          ),
       )
       return None
 
@@ -623,10 +611,7 @@ class ModernContractApp:
       doc = DocxTemplate(template_path)
       doc.render(data)
 
-      user_custom_dir = self.custom_output_dir.get()
-      output_dir = (
-          user_custom_dir if user_custom_dir else self.default_output_dir.get()
-      )
+      output_dir = self.default_output_dir.get()
       os.makedirs(output_dir, exist_ok=True)
 
       safe_num = data["contract_num"].replace("/", "_").replace("\\", "_")
@@ -635,6 +620,7 @@ class ModernContractApp:
           if data["client_type"] == "ur"
           else data.get("fio")
       )
+
       if name_identifier:
         safe_name = name_identifier.split()[0]
         filename = os.path.join(
@@ -670,10 +656,11 @@ class ModernContractApp:
               "Внимание", "Автопечать поддерживается только на Windows."
           )
       except Exception as e:
-        messagebox.showerror("Ошибка печати", f"Не удалось отправить на печать: {e}")
+        messagebox.showerror(
+            "Ошибка печати", f"Не удалось отправить на печать: {e}"
+        )
 
 
 if __name__ == "__main__":
-  root = tk.Tk()
-  app = ModernContractApp(root)
-  root.mainloop()
+  app = ModernContractApp()
+  app.mainloop()
