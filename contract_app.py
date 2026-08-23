@@ -20,17 +20,21 @@ TEXT_DARK = "#121212"
 
 if getattr(sys, "frozen", False):
   BASE_DIR = sys._MEIPASS
-  CONFIG_DIR = os.path.dirname(sys.executable)
 else:
   BASE_DIR = r"F:\Files\Работа\Factory Motors\Генератор договоров"
-  CONFIG_DIR = BASE_DIR
 
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
+
+# Переносим config.json в системную папку AppData\Roaming\FactoryMotorsContracts на компьютере пользователя
+CONFIG_DIR = os.path.join(
+    os.getenv("APPDATA") or os.path.expanduser("~"), "FactoryMotorsContracts"
+)
+os.makedirs(CONFIG_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 
 def load_default_dir():
-  default_path = os.path.join(BASE_DIR, "generated_contracts")
+  default_path = os.path.join(CONFIG_DIR, "generated_contracts")
   if os.path.exists(CONFIG_FILE):
     try:
       with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -106,8 +110,7 @@ class ModernContractApp(ctk.CTk):
     except Exception:
       pass
 
-    self.default_output_dir = ctk.StringVar(value=load_default_dir())
-    self.custom_output_dir = ctk.StringVar(value="")
+    self.current_output_dir = ctk.StringVar(value=load_default_dir())
 
     self.scroll_frame = ctk.CTkScrollableFrame(
         self, corner_radius=0, fg_color="transparent"
@@ -156,7 +159,7 @@ class ModernContractApp(ctk.CTk):
 
     self.theme_btn = ctk.CTkButton(
         header_frame,
-        text="🌙 Сменить тему",
+        text="🌙 Светлая тема",
         width=140,
         height=32,
         font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
@@ -172,7 +175,7 @@ class ModernContractApp(ctk.CTk):
     if current == "Dark":
       ctk.set_appearance_mode("Light")
       self.theme_btn.configure(
-          text="Тёмная тема",
+          text="☀️ Темная тема",
           fg_color="#e0e0e0",
           hover_color="#cccccc",
           text_color="#222222",
@@ -180,7 +183,7 @@ class ModernContractApp(ctk.CTk):
     else:
       ctk.set_appearance_mode("Dark")
       self.theme_btn.configure(
-          text="Светлая тема",
+          text="🌙 Светлая тема",
           fg_color="#333333",
           hover_color="#444444",
           text_color="#ffffff",
@@ -425,31 +428,42 @@ class ModernContractApp(ctk.CTk):
         fg_color=BRAND_YELLOW,
     ).pack(anchor="w", pady=3)
 
-    # --- СЕКЦИЯ 7 ---
+    # --- СЕКЦИЯ 7: Папка для сохранения документов ---
     f7 = self.create_card("7. Папка для сохранения документов")
+
     dir_row = ctk.CTkFrame(f7, fg_color="transparent")
     dir_row.pack(fill="x", pady=5)
 
-    curr_default = self.default_output_dir.get()
-    short_default = (
-        curr_default if len(curr_default) < 50 else "..." + curr_default[-47:]
-    )
+    curr_path = self.current_output_dir.get()
+    short_path = curr_path if len(curr_path) < 45 else "..." + curr_path[-42:]
 
-    self.lbl_default_dir = ctk.CTkLabel(
-        dir_row, text=f"По умолчанию: {short_default}"
+    self.lbl_current_dir = ctk.CTkLabel(
+        dir_row, text=f"Текущий путь: {short_path}", font=ctk.CTkFont(size=12)
     )
-    self.lbl_default_dir.pack(side="left", padx=(0, 15))
+    self.lbl_current_dir.pack(side="left", padx=(0, 15))
 
-    btn_set_default = ctk.CTkButton(
+    btn_choose_dir = ctk.CTkButton(
         dir_row,
-        text="⚙️ Изменить папку",
-        width=140,
-        height=30,
+        text="📁 Выбрать папку",
+        width=150,
+        height=32,
         fg_color=BRAND_YELLOW,
         hover_color=BRAND_YELLOW_HOVER,
         text_color=TEXT_DARK,
         font=ctk.CTkFont(weight="bold"),
-        command=self.change_default_directory,
+        command=self.choose_directory,
+    )
+    btn_choose_dir.pack(side="left", padx=(0, 8))
+
+    btn_set_default = ctk.CTkButton(
+        dir_row,
+        text="⚙️ Выбрать папку по умолчанию",
+        width=210,
+        height=32,
+        fg_color="#333333",
+        hover_color="#444444",
+        text_color="#ffffff",
+        command=self.set_as_default_directory,
     )
     btn_set_default.pack(side="left")
 
@@ -491,15 +505,39 @@ class ModernContractApp(ctk.CTk):
       self.fiz_frame.pack_forget()
       self.ur_frame.pack(fill="x", expand=True)
 
-  def change_default_directory(self):
-    new_dir = filedialog.askdirectory(title="Выберите новую папку по умолчанию")
+  def choose_directory(self):
+    initial_dir = self.current_output_dir.get()
+    if not os.path.exists(initial_dir):
+      initial_dir = (
+          os.getenv("APPDATA") or os.path.expanduser("~")
+      )
+
+    new_dir = filedialog.askdirectory(
+        title="Выберите папку для сохранения договора", initialdir=initial_dir
+    )
     if new_dir:
-      self.default_output_dir.set(new_dir)
+      self.current_output_dir.set(new_dir)
+      short_path = new_dir if len(new_dir) < 45 else "..." + new_dir[-42:]
+      self.lbl_current_dir.configure(text=f"Текущий путь: {short_path}")
+
+  def set_as_default_directory(self):
+    initial_dir = self.current_output_dir.get()
+    if not os.path.exists(initial_dir):
+      initial_dir = (
+          os.getenv("APPDATA") or os.path.expanduser("~")
+      )
+
+    new_dir = filedialog.askdirectory(
+        title="Выберите общую корневую папку по умолчанию",
+        initialdir=initial_dir,
+    )
+    if new_dir:
+      self.current_output_dir.set(new_dir)
       save_default_dir(new_dir)
-      short_path = new_dir if len(new_dir) < 50 else "..." + new_dir[-47:]
-      self.lbl_default_dir.configure(text=f"По умолчанию: {short_path}")
+      short_path = new_dir if len(new_dir) < 45 else "..." + new_dir[-42:]
+      self.lbl_current_dir.configure(text=f"Текущий путь: {short_path}")
       messagebox.showinfo(
-          "Успех", f"Папка по умолчанию успешно изменена на:\n{new_dir}"
+          "Успех", f"Корневая папка по умолчанию успешно сохранена:\n{new_dir}"
       )
 
   def validate_and_collect_data(self):
@@ -611,7 +649,7 @@ class ModernContractApp(ctk.CTk):
       doc = DocxTemplate(template_path)
       doc.render(data)
 
-      output_dir = self.default_output_dir.get()
+      output_dir = self.current_output_dir.get()
       os.makedirs(output_dir, exist_ok=True)
 
       safe_num = data["contract_num"].replace("/", "_").replace("\\", "_")
