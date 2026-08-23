@@ -310,6 +310,7 @@ class ModernContractApp:
       row += 1
       return ent
 
+    # 1. Основные данные
     add_section_header("1. Основные данные договора")
     self.e_contract_num = add_global_field("Номер договора:")
     today_str = datetime.date.today().strftime("%d.%m.%Y")
@@ -317,6 +318,7 @@ class ModernContractApp:
         "Дата договора (ДД.ММ.ГГГГ):", today_str
     )
 
+    # 2. Тип покупателя
     add_section_header("2. Тип покупателя")
     self.client_type_var = tk.StringVar(value="fiz")
 
@@ -344,7 +346,89 @@ class ModernContractApp:
     )
     r_ur.pack(side="left")
 
-    add_section_header("3. Папка для сохранения документов")
+    # 3. Данные покупателя
+    add_section_header("3. Данные покупателя")
+
+    self.buyer_container = ttk.Frame(form)
+    self.buyer_container.grid(
+        row=row, column=0, columnspan=2, sticky="nsew", padx=0, pady=0
+    )
+    row += 1
+
+    # Фрейм физ. лица
+    self.fiz_frame = ttk.Frame(self.buyer_container)
+    self.fiz_frame.pack(fill="both", expand=True)
+
+    self.e_fio = add_field(self.fiz_frame, "Фамилия Имя Отчество:")
+    self.e_passport_series = add_field(
+        self.fiz_frame, "Серия паспорта (4 цифры):"
+    )
+    self.e_passport_num = add_field(self.fiz_frame, "Номер паспорта (6 цифр):")
+    self.e_passport_issued = add_field(self.fiz_frame, "Кем выдан:")
+    self.e_passport_code = add_field(self.fiz_frame, "Код подразделения:")
+    self.e_inn_fiz = add_field(self.fiz_frame, "ИНН клиента (12 цифр):")
+    self.e_address = add_field(self.fiz_frame, "Адрес прописки:")
+
+    # Фрейм юр. лица
+    self.ur_frame = ttk.Frame(self.buyer_container)
+
+    self.e_org_name = add_field(
+        self.ur_frame, "Название организации (ООО, АО и т.д.):"
+    )
+    self.e_director = add_field(
+        self.ur_frame, "Генеральный директор (ФИО полностью):"
+    )
+    self.e_rs = add_field(self.ur_frame, "Расчетный счет (р/с):")
+    self.e_ks = add_field(self.ur_frame, "Корреспондентский счет (к/с):")
+    self.e_bik = add_field(self.ur_frame, "БИК банка:")
+    self.e_bank = add_field(self.ur_frame, "Наименование банка:")
+    self.e_inn_ur = add_field(self.ur_frame, "ИНН организации:")
+    self.e_kpp = add_field(self.ur_frame, "КПП организации:")
+    self.e_legal_address = add_field(self.ur_frame, "Юридический адрес:")
+    self.e_phone = add_field(self.ur_frame, "Телефон:")
+    self.e_email = add_field(self.ur_frame, "E-mail:")
+
+    self.ur_frame.pack_forget()
+
+    # 4. Двигатель и автомобиль
+    add_section_header("4. Двигатель и автомобиль")
+    self.e_engine_model = add_global_field("Модель двигателя:")
+    self.e_engine_num = add_global_field("Номер двигателя:")
+    self.e_car_brand = add_global_field("Марка машины:")
+    self.e_car_model = add_global_field("Модель автомобиля:")
+    self.e_car_gosnum = add_global_field("Госномер:")
+
+    # 5. Стоимость товара
+    add_section_header("5. Стоимость товара")
+    self.e_price = add_global_field("Стоимость (цифрами, например 120000):")
+
+    # 6. Условия гарантии
+    add_section_header("6. Условия гарантии и установки")
+    self.service_var = tk.StringVar(value="our")
+
+    r1 = ttk.Radiobutton(
+        form,
+        text="Установка в нашем сервисе (Гарантия 6 месяцев или 30 000 км)",
+        variable=self.service_var,
+        value="our",
+    )
+    r1.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+    row += 1
+
+    r2 = ttk.Radiobutton(
+        form,
+        text=(
+            "Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)"
+        ),
+        variable=self.service_var,
+        value="other",
+    )
+    r2.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+    row += 1
+
+    # 7. Папка для сохранения документов (теперь в самом конце перед кнопками)
+    add_section_header("7. Папка для сохранения документов")
+
     dir_default_frame = ttk.Frame(form)
     dir_default_frame.grid(
         row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2
@@ -391,82 +475,7 @@ class ModernContractApp:
     )
     btn_choose_dir.pack(side="left")
 
-    add_section_header("4. Данные покупателя")
-
-    self.buyer_container = ttk.Frame(form)
-    self.buyer_container.grid(
-        row=row, column=0, columnspan=2, sticky="nsew", padx=0, pady=0
-    )
-    row += 1
-
-    # Фрейм физ. лица
-    self.fiz_frame = ttk.Frame(self.buyer_container)
-    self.fiz_frame.pack(fill="both", expand=True)
-
-    self.e_fio = add_field(self.fiz_frame, "Фамилия Имя Отчество:")
-    self.e_passport_series = add_field(
-        self.fiz_frame, "Серия паспорта (4 цифры):"
-    )
-    self.e_passport_num = add_field(self.fiz_frame, "Номер паспорта (6 цифр):")
-    self.e_passport_issued = add_field(self.fiz_frame, "Кем выдан:")
-    self.e_passport_code = add_field(self.fiz_frame, "Код подразделения:")
-    self.e_inn_fiz = add_field(self.fiz_frame, "ИНН клиента (12 цифр):")
-    self.e_address = add_field(self.fiz_frame, "Адрес прописки:")
-
-    # Фрейм юр. лица
-    self.ur_frame = ttk.Frame(self.buyer_container)
-
-    self.e_org_name = add_field(
-        self.ur_frame, "Название организации (ООО, АО и т.д.):"
-    )
-    self.e_director = add_field(
-        self.ur_frame, "Генеральный директор (ФИО полностью):"
-    )
-    self.e_rs = add_field(self.ur_frame, "Расчетный счет (р/с):")
-    self.e_ks = add_field(self.ur_frame, "Корреспондентский счет (к/с):")
-    self.e_bik = add_field(self.ur_frame, "БИК банка:")
-    self.e_bank = add_field(self.ur_frame, "Наименование банка:")
-    self.e_inn_ur = add_field(self.ur_frame, "ИНН организации:")
-    self.e_kpp = add_field(self.ur_frame, "КПП организации:")
-    self.e_legal_address = add_field(self.ur_frame, "Юридический адрес:")
-    self.e_phone = add_field(self.ur_frame, "Телефон:")
-    self.e_email = add_field(self.ur_frame, "E-mail:")
-
-    self.ur_frame.pack_forget()
-
-    add_section_header("5. Двигатель и автомобиль")
-    self.e_engine_model = add_global_field("Модель двигателя:")
-    self.e_engine_num = add_global_field("Номер двигателя:")
-    self.e_car_brand = add_global_field("Марка машины:")
-    self.e_car_model = add_global_field("Модель автомобиля:")
-    self.e_car_gosnum = add_global_field("Госномер:")
-
-    add_section_header("6. Стоимость товара")
-    self.e_price = add_global_field("Стоимость (цифрами, например 120000):")
-
-    add_section_header("7. Условия гарантии и установки")
-    self.service_var = tk.StringVar(value="our")
-
-    r1 = ttk.Radiobutton(
-        form,
-        text="Установка в нашем сервисе (Гарантия 6 месяцев или 30 000 км)",
-        variable=self.service_var,
-        value="our",
-    )
-    r1.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
-    row += 1
-
-    r2 = ttk.Radiobutton(
-        form,
-        text=(
-            "Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)"
-        ),
-        variable=self.service_var,
-        value="other",
-    )
-    r2.grid(row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2)
-    row += 1
-
+    # Кнопки
     btn_frame = ttk.Frame(form)
     btn_frame.grid(row=row, column=0, columnspan=2, pady=25)
 
@@ -598,7 +607,6 @@ class ModernContractApp:
     if not data:
       return None
 
-    # Выбираем правильный шаблон в зависимости от типа клиента
     if data["client_type"] == "fiz":
       template_filename = "template_fiz.docx"
     else:
