@@ -11,17 +11,17 @@ from PIL import Image, ImageTk
 # Определяем правильный путь для автономного .exe (включая распаковку во временную папку)
 if getattr(sys, "frozen", False):
   BASE_DIR = sys._MEIPASS
-  # Для сохранения конфига рядом с запущенным .exe файлом
   CONFIG_DIR = os.path.dirname(sys.executable)
 else:
   BASE_DIR = r"F:\Files\Работа\Factory Motors\Генератор договоров"
   CONFIG_DIR = BASE_DIR
 
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+# Путь к папке с графикой
+IMAGES_DIR = os.path.join(BASE_DIR, "images")
 
 
 def load_default_dir():
-  """Загружает сохраненную папку по умолчанию из конфига"""
   default_path = os.path.join(BASE_DIR, "generated_contracts")
   if os.path.exists(CONFIG_FILE):
     try:
@@ -36,7 +36,6 @@ def load_default_dir():
 
 
 def save_default_dir(path):
-  """Сохраняет выбранную папку в конфиг"""
   try:
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
       json.dump({"default_dir": path}, f, ensure_ascii=False, indent=4)
@@ -93,9 +92,9 @@ class ModernContractApp:
     self.root.geometry("850x1020")
     self.root.minsize(750, 700)
 
-    # Установка иконки приложения и панели задач
+    # Установка иконки приложения и панели задач из папки images
     try:
-      self.root.iconbitmap(os.path.join(BASE_DIR, "logo.ico"))
+      self.root.iconbitmap(os.path.join(IMAGES_DIR, "logo.ico"))
     except Exception:
       pass
 
@@ -103,7 +102,6 @@ class ModernContractApp:
     self.default_output_dir = tk.StringVar(value=load_default_dir())
     self.custom_output_dir = tk.StringVar(value="")
 
-    # Главный контейнер со скроллом
     container = ttk.Frame(root)
     container.pack(fill="both", expand=True)
 
@@ -146,14 +144,12 @@ class ModernContractApp:
   def update_logo(self, theme_name):
     if theme_name == "dark":
       logo_filename = "logo_dark.png"
-      fallback_filename = "logo.png"
     else:
       logo_filename = "logo_light.png"
-      fallback_filename = "logo.png"
 
-    path = os.path.join(BASE_DIR, logo_filename)
+    path = os.path.join(IMAGES_DIR, logo_filename)
     if not os.path.exists(path):
-      path = os.path.join(BASE_DIR, fallback_filename)
+      path = os.path.join(IMAGES_DIR, "logo.png")
 
     if os.path.exists(path):
       try:
@@ -308,7 +304,6 @@ class ModernContractApp:
 
     add_section_header("2. Папка для сохранения документов")
 
-    # Блок папки по умолчанию
     dir_default_frame = ttk.Frame(form)
     dir_default_frame.grid(
         row=row, column=0, columnspan=2, sticky="w", padx=5, pady=2
@@ -334,7 +329,6 @@ class ModernContractApp:
     )
     btn_set_default.pack(side="left")
 
-    # Блок разового выбора папки для конкретного договора
     dir_custom_frame = ttk.Frame(form)
     dir_custom_frame.grid(
         row=row, column=0, columnspan=2, sticky="w", padx=5, pady=4
@@ -539,9 +533,6 @@ class ModernContractApp:
       doc = DocxTemplate(template_path)
       doc.render(data)
 
-      # Логика выбора папки сохранения:
-      # 1. Если выбрана разовая папка для конкретного договора — берем её.
-      # 2. Иначе берем постоянную папку по умолчанию (которую настроили через кнопку).
       user_custom_dir = self.custom_output_dir.get()
       if user_custom_dir:
         output_dir = user_custom_dir
