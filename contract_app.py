@@ -11,9 +11,8 @@ import customtkinter as ctk
 from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
-import webbrowser
 
-CURRENT_VERSION = "v1.0.3"
+CURRENT_VERSION = "v1.0.1"
 REPO_OWNER = "Tohenzoo"
 REPO_NAME = "factory-motors-contracts"
 
@@ -68,9 +67,7 @@ def save_default_dir(path):
 
 def number_to_words_ru(amount_str):
   try:
-    clean_str = (
-        amount_str.replace(" ", "").replace(".", "").replace(",", "")
-    )
+    clean_str = amount_str.replace(" ", "").replace(".", "").replace(",", "")
     if not clean_str.isdigit():
       return BLANK_LINE
     amount = int(clean_str)
@@ -122,8 +119,6 @@ class ModernContractApp(ctk.CTk):
       pass
 
     self.current_output_dir = ctk.StringVar(value=load_default_dir())
-    self.new_exe_url = None
-    self.new_version_tag = None
 
     self.scroll_frame = ctk.CTkScrollableFrame(
         self, corner_radius=0, fg_color="transparent"
@@ -133,8 +128,8 @@ class ModernContractApp(ctk.CTk):
     self.create_header()
     self.create_form_sections()
 
-    # Запускаем тихую фоновую проверку обновлений при старте
-    threading.Thread(target=self.silent_check_updates, daemon=True).start()
+    # Фоновая тихая проверка версии
+    threading.Thread(target=self.check_for_new_version, daemon=True).start()
 
   def create_header(self):
     header_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
@@ -173,21 +168,15 @@ class ModernContractApp(ctk.CTk):
     )
     lbl_sub.pack(anchor="w", pady=(2, 0))
 
-    # Блок кнопок управления в шапке справа
     self.header_btns = ctk.CTkFrame(header_frame, fg_color="transparent")
     self.header_btns.pack(side="right", anchor="ne")
 
-    # Кнопка обновления (по умолчанию скрыта)
-    self.update_btn = ctk.CTkButton(
+    # Заглушка-уведомление об обновлении (по умолчанию скрыта)
+    self.lbl_update_notice = ctk.CTkLabel(
         self.header_btns,
-        text="✨ Доступно обновление",
-        width=175,
-        height=32,
+        text="",
         font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
-        fg_color="#27ae60",
-        hover_color="#219653",
-        text_color="#ffffff",
-        command=self.perform_update,
+        text_color="#2ecc71",
     )
 
     self.theme_btn = ctk.CTkButton(
@@ -203,12 +192,38 @@ class ModernContractApp(ctk.CTk):
     )
     self.theme_btn.pack(side="right")
 
+  def check_for_new_version(self):
+    """Тихая проверка нового тега на GitHub"""
+    try:
+      url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+      req = urllib.request.Request(
+          url,
+          headers={
+              "User-Agent": "Mozilla/5.0",
+              "Accept": "application/vnd.github.v3+json",
+          },
+      )
+      with urllib.request.urlopen(req, timeout=4) as resp:
+        data = json.loads(resp.read().decode())
+
+      latest_tag = data.get("tag_name", "").strip()
+      if latest_tag and latest_tag != CURRENT_VERSION:
+        self.after(0, self.display_update_notice, latest_tag)
+    except Exception:
+      pass
+
+  def display_update_notice(self, new_tag):
+    self.lbl_update_notice.configure(
+        text=f"🔔 Вышло новое обновление ({new_tag})"
+    )
+    self.lbl_update_notice.pack(side="left", padx=(0, 15))
+
   def toggle_theme(self):
     current = ctk.get_appearance_mode()
     if current == "Dark":
       ctk.set_appearance_mode("Light")
       self.theme_btn.configure(
-          text="Темная тема",
+          text="☀️ Темная тема",
           fg_color="#e0e0e0",
           hover_color="#cccccc",
           text_color="#222222",
@@ -216,88 +231,11 @@ class ModernContractApp(ctk.CTk):
     else:
       ctk.set_appearance_mode("Dark")
       self.theme_btn.configure(
-          text="Светлая тема",
+          text="🌙 Светлая тема",
           fg_color="#333333",
           hover_color="#444444",
           text_color="#ffffff",
       )
-
-  def silent_check_updates(self):
-    """Фоновая проверка обновлений без блокировки интерфейса"""
-    try:
-      if not getattr(sys, "frozen", False):
-        # Проверка через Git
-        subprocess.run(
-            ["git", "fetch", "origin", "main"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        res = subprocess.run(
-            ["git", "status", "-uno"], capture_output=True, text=True, timeout=5
-        )
-        if "Your branch is behind" in res.stdout:
-          self.after(0, self.show_update_button, "✨ Обновить проект (Git)")
-      else:
-        # Проверка через GitHub Releases для .exe
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/vnd.github.v3+json",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-          data = json.loads(resp.read().decode())
-
-        latest_tag = data.get("tag_name", "")
-        if latest_tag and latest_tag != CURRENT_VERSION:
-          for asset in data.get("assets", []):
-            if asset.get("name", "").endswith(".exe"):
-              self.new_exe_url = asset.get("browser_download_url")
-              self.new_version_tag = latest_tag
-              self.after(
-                  0,
-                  self.show_update_button,
-                  f"✨ Обновить до {latest_tag}",
-              )
-              break
-    except Exception:
-      pass
-
-  def show_update_button(self, btn_text):
-    self.update_btn.configure(text=btn_text)
-    self.update_btn.pack(side="left", padx=(0, 10))
-
-  def perform_update(self):
-      if not getattr(sys, "frozen", False):
-        try:
-          subprocess.run(
-              ["git", "pull", "origin", "main"],
-              capture_output=True,
-              text=True,
-              check=True,
-          )
-          messagebox.showinfo(
-              "Успех", "Обновления установлены! Приложение перезапускается..."
-          )
-          os.execv(sys.executable, ["python"] + sys.argv)
-        except Exception as e:
-          messagebox.showerror(
-              "Ошибка", f"Не удалось обновиться через Git:\n{e}"
-          )
-      else:
-        if not self.new_exe_url:
-          # Если прямая ссылка не найдена, открываем страницу последнего релиза
-          direct_url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/latest"
-        else:
-          # Прямая ссылка на .exe — браузер сразу начнет автоматическую загрузку
-          direct_url = self.new_exe_url
-
-        import webbrowser
-
-        webbrowser.open(direct_url)
 
   def create_card(self, title_text):
     card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
@@ -515,7 +453,7 @@ class ModernContractApp(ctk.CTk):
     self.e_price = ctk.CTkEntry(f5, height=32, border_color=BRAND_YELLOW)
     self.e_price.pack(fill="x", pady=(0, 5))
 
-    # --- СЕКЦИЯ 6: Гарантия (3 месяца сверху, 6 месяцев снизу) ---
+    # --- СЕКЦИЯ 6: Гарантия ---
     f6 = self.create_card("6. Условия гарантии и установки")
     self.service_var = ctk.StringVar(value="other")
 
@@ -707,9 +645,7 @@ class ModernContractApp(ctk.CTk):
   def validate_and_collect_data(self):
     ctype = self.client_type_var.get()
     price_val = self.e_price.get().strip()
-    price_words = (
-        number_to_words_ru(price_val) if price_val else BLANK_LINE
-    )
+    price_words = number_to_words_ru(price_val) if price_val else BLANK_LINE
     raw_date = self.e_contract_date.get().strip()
     formatted_date = format_date_with_month_name(raw_date)
 
@@ -879,7 +815,6 @@ class ModernContractApp(ctk.CTk):
           word = win32com.client.Dispatch("Word.Application")
           word.Visible = True
           doc = word.Documents.Open(os.path.abspath(filename))
-          # 88 — константа wdDialogFilePrint в Word, открывающая диалог печати
           dialog = word.Dialogs(88)
           dialog.Show()
           self.open_target_folder(filename)
