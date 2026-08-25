@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import urllib.request
@@ -11,7 +12,7 @@ from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
 
-CURRENT_VERSION = "v1.0.0"
+CURRENT_VERSION = "v1.0.1"
 REPO_OWNER = "Tohenzoo"
 REPO_NAME = "factory-motors-contracts"
 
@@ -120,6 +121,8 @@ class ModernContractApp(ctk.CTk):
       pass
 
     self.current_output_dir = ctk.StringVar(value=load_default_dir())
+    self.new_exe_url = None
+    self.new_version_tag = None
 
     self.scroll_frame = ctk.CTkScrollableFrame(
         self, corner_radius=0, fg_color="transparent"
@@ -128,6 +131,9 @@ class ModernContractApp(ctk.CTk):
 
     self.create_header()
     self.create_form_sections()
+
+    # Запускаем тихую фоновую проверку обновлений при старте
+    threading.Thread(target=self.silent_check_updates, daemon=True).start()
 
   def create_header(self):
     header_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
@@ -167,24 +173,24 @@ class ModernContractApp(ctk.CTk):
     lbl_sub.pack(anchor="w", pady=(2, 0))
 
     # Блок кнопок управления в шапке справа
-    header_btns = ctk.CTkFrame(header_frame, fg_color="transparent")
-    header_btns.pack(side="right", anchor="ne")
+    self.header_btns = ctk.CTkFrame(header_frame, fg_color="transparent")
+    self.header_btns.pack(side="right", anchor="ne")
 
+    # Кнопка обновления (по умолчанию скрыта)
     self.update_btn = ctk.CTkButton(
-        header_btns,
-        text="🔄 Обновить приложение",
-        width=165,
+        self.header_btns,
+        text="✨ Доступно обновление",
+        width=175,
         height=32,
         font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
         fg_color="#27ae60",
         hover_color="#219653",
         text_color="#ffffff",
-        command=self.check_and_update,
+        command=self.perform_update,
     )
-    self.update_btn.pack(side="left", padx=(0, 10))
 
     self.theme_btn = ctk.CTkButton(
-        header_btns,
+        self.header_btns,
         text="🌙 Светлая тема",
         width=140,
         height=32,
@@ -194,7 +200,7 @@ class ModernContractApp(ctk.CTk):
         text_color="#ffffff",
         command=self.toggle_theme,
     )
-    self.theme_btn.pack(side="left")
+    self.theme_btn.pack(side="right")
 
   def toggle_theme(self):
     current = ctk.get_appearance_mode()
@@ -215,82 +221,104 @@ class ModernContractApp(ctk.CTk):
           text_color="#ffffff",
       )
 
-  def check_and_update(self):
+  def silent_check_updates(self):
+    """Фоновая проверка обновлений без блокировки интерфейса"""
+    try:
+      if not getattr(sys, "frozen", False):
+        # Проверка через Git
+        subprocess.run(
+            ["git", "fetch", "origin", "main"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        res = subprocess.run(
+            ["git", "status", "-uno"], capture_output=True, text=True, timeout=5
+        )
+        if "Your branch is behind" in res.stdout:
+          self.after(0, self.show_update_button, "✨ Обновить проект (Git)")
+      else:
+        # Проверка через GitHub Releases для .exe
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/vnd.github.v3+json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+          data = json.loads(resp.read().decode())
+
+        latest_tag = data.get("tag_name", "")
+        if latest_tag and latest_tag != CURRENT_VERSION:
+          for asset in data.get("assets", []):
+            if asset.get("name", "").endswith(".exe"):
+              self.new_exe_url = asset.get("browser_download_url")
+              self.new_version_tag = latest_tag
+              self.after(
+                  0,
+                  self.show_update_button,
+                  f"✨ Обновить до {latest_tag}",
+              )
+              break
+    except Exception:
+      pass
+
+  def show_update_button(self, btn_text):
+    self.update_btn.configure(text=btn_text)
+    self.update_btn.pack(side="left", padx=(0, 10))
+
+  def perform_update(self):
     if not getattr(sys, "frozen", False):
       try:
-        result = subprocess.run(
+        subprocess.run(
             ["git", "pull", "origin", "main"],
             capture_output=True,
             text=True,
             check=True,
         )
-        if (
-            "Already up to date" in result.stdout
-            or "Уже обновлено" in result.stdout
-        ):
-          messagebox.showinfo(
-              "Обновление", "У вас установлена последняя версия!"
-          )
-        else:
-          messagebox.showinfo(
-              "Успех", "Обновления загружены. Приложение перезапускается..."
-          )
-          os.execv(sys.executable, ["python"] + sys.argv)
+        messagebox.showinfo(
+            "Успех", "Обновления установлены! Приложение перезапускается..."
+        )
+        os.execv(sys.executable, ["python"] + sys.argv)
       except Exception as e:
         messagebox.showerror(
             "Ошибка", f"Не удалось обновиться через Git:\n{e}"
         )
     else:
-      try:
-        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req) as resp:
-          data = json.loads(resp.read().decode())
+      if not self.new_exe_url:
+        messagebox.showinfo(
+            "Обновление", "У вас установлена актуальная версия!"
+        )
+        return
 
-        latest_tag = data.get("tag_name", "")
-        if latest_tag and latest_tag != CURRENT_VERSION:
-          exe_url = None
-          for asset in data.get("assets", []):
-            if asset.get("name", "").endswith(".exe"):
-              exe_url = asset.get("browser_download_url")
-              break
+      if messagebox.askyesno(
+          "Обновление",
+          f"Вышло обновление {self.new_version_tag}!\nСкачать и перезапустить"
+          " программу?",
+      ):
+        try:
+          temp_exe = os.path.join(
+              os.getenv("TEMP"), "Генератор_Договоров_new.exe"
+          )
+          urllib.request.urlretrieve(self.new_exe_url, temp_exe)
 
-          if not exe_url:
-            messagebox.showwarning(
-                "Внимание",
-                "Найден новый релиз, но исполняемый .exe файл не прикреплен к"
-                " релизу.",
-            )
-            return
-
-          if messagebox.askyesno(
-              "Доступно обновление",
-              f"Доступна новая версия {latest_tag}. Скачать и обновить?",
-          ):
-            temp_exe = os.path.join(
-                os.getenv("TEMP"), "Генератор_Договоров_new.exe"
-            )
-            urllib.request.urlretrieve(exe_url, temp_exe)
-
-            curr_exe = sys.executable
-            bat_path = os.path.join(os.getenv("TEMP"), "updater.bat")
-            with open(bat_path, "w", encoding="cp1251") as f:
-              f.write(f"""@echo off
+          curr_exe = sys.executable
+          bat_path = os.path.join(os.getenv("TEMP"), "updater.bat")
+          with open(bat_path, "w", encoding="cp1251") as f:
+            f.write(f"""@echo off
 timeout /t 2 /nobreak > NUL
 move /y "{temp_exe}" "{curr_exe}"
 start "" "{curr_exe}"
 del "%~f0"
 """)
-            subprocess.Popen([bat_path], shell=True)
-            sys.exit(0)
-        else:
-          messagebox.showinfo(
-              "Обновление", "У вас установлена актуальная версия приложения!"
+          subprocess.Popen([bat_path], shell=True)
+          sys.exit(0)
+        except Exception as e:
+          messagebox.showerror(
+              "Ошибка обновления", f"Не удалось скачать обновление:\n{e}"
           )
-      except Exception as e:
-        messagebox.showerror(
-            "Ошибка", f"Не удалось проверить обновления на GitHub:\n{e}"
-        )
 
   def create_card(self, title_text):
     card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
