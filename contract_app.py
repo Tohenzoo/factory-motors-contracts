@@ -12,7 +12,7 @@ from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
 
-CURRENT_VERSION = "v1.0.1"
+CURRENT_VERSION = "v1.0.4"
 REPO_OWNER = "Tohenzoo"
 REPO_NAME = "factory-motors-contracts"
 
