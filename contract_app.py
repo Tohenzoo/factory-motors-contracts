@@ -217,7 +217,6 @@ class ModernContractApp(ctk.CTk):
 
   def check_and_update(self):
     if not getattr(sys, "frozen", False):
-      # Запуск из исходников Python через Git
       try:
         result = subprocess.run(
             ["git", "pull", "origin", "main"],
@@ -242,7 +241,6 @@ class ModernContractApp(ctk.CTk):
             "Ошибка", f"Не удалось обновиться через Git:\n{e}"
         )
     else:
-      # Запуск скомпилированного .exe через GitHub Releases
       try:
         url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -869,19 +867,26 @@ del "%~f0"
     if filename:
       try:
         if os.name == "nt":
-          os.startfile(filename, "print")
-          messagebox.showinfo(
-              "Печать", "Документ отправлен на принтер по умолчанию."
-          )
+          import win32com.client
+
+          word = win32com.client.Dispatch("Word.Application")
+          word.Visible = True
+          doc = word.Documents.Open(os.path.abspath(filename))
+          # 88 — константа wdDialogFilePrint в Word, открывающая диалог печати
+          dialog = word.Dialogs(88)
+          dialog.Show()
           self.open_target_folder(filename)
         else:
-          messagebox.showwarning(
-              "Внимание", "Автопечать поддерживается только на Windows."
+          os.startfile(filename)
+          self.open_target_folder(filename)
+      except Exception:
+        try:
+          os.startfile(filename)
+          self.open_target_folder(filename)
+        except Exception as e:
+          messagebox.showerror(
+              "Ошибка открытия", f"Не удалось открыть документ: {e}"
           )
-      except Exception as e:
-        messagebox.showerror(
-            "Ошибка печати", f"Не удалось отправить на печать: {e}"
-        )
 
 
 if __name__ == "__main__":
