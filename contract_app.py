@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import subprocess
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -25,12 +26,15 @@ else:
 
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
 
-# Переносим config.json в системную папку AppData\Roaming\FactoryMotorsContracts на компьютере пользователя
+# Конфиг сохраняется в системной папке профиля пользователя
 CONFIG_DIR = os.path.join(
     os.getenv("APPDATA") or os.path.expanduser("~"), "FactoryMotorsContracts"
 )
 os.makedirs(CONFIG_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+
+# Заполнитель для пустых полей, чтобы текст в договоре не слипался
+BLANK_LINE = "____________________"
 
 
 def load_default_dir():
@@ -61,13 +65,13 @@ def number_to_words_ru(amount_str):
         amount_str.replace(" ", "").replace(".", "").replace(",", "")
     )
     if not clean_str.isdigit():
-      return amount_str
+      return BLANK_LINE
     amount = int(clean_str)
     words = num2words(amount, lang="ru")
     words = words.split(" целых")[0]
     return words.capitalize()
   except Exception:
-    return str(amount_str)
+    return BLANK_LINE
 
 
 def format_date_with_month_name(date_str):
@@ -93,7 +97,7 @@ def format_date_with_month_name(date_str):
         return f"{int(day)} {months[month]} {year} г."
   except Exception:
     pass
-  return date_str
+  return date_str if date_str else BLANK_LINE
 
 
 class ModernContractApp(ctk.CTk):
@@ -405,9 +409,19 @@ class ModernContractApp(ctk.CTk):
     self.e_price = ctk.CTkEntry(f5, height=32, border_color=BRAND_YELLOW)
     self.e_price.pack(fill="x", pady=(0, 5))
 
-    # --- СЕКЦИЯ 6 ---
+    # --- СЕКЦИЯ 6: Гарантия (3 месяца сверху, 6 месяцев снизу) ---
     f6 = self.create_card("6. Условия гарантии и установки")
-    self.service_var = ctk.StringVar(value="our")
+    self.service_var = ctk.StringVar(value="other")
+
+    ctk.CTkRadioButton(
+        f6,
+        text="Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)",
+        variable=self.service_var,
+        value="other",
+        border_color=BRAND_YELLOW,
+        hover_color=BRAND_YELLOW_HOVER,
+        fg_color=BRAND_YELLOW,
+    ).pack(anchor="w", pady=4)
 
     ctk.CTkRadioButton(
         f6,
@@ -417,16 +431,7 @@ class ModernContractApp(ctk.CTk):
         border_color=BRAND_YELLOW,
         hover_color=BRAND_YELLOW_HOVER,
         fg_color=BRAND_YELLOW,
-    ).pack(anchor="w", pady=3)
-    ctk.CTkRadioButton(
-        f6,
-        text="Установка в стороннем сервисе (Гарантия 3 месяца или 20 000 км)",
-        variable=self.service_var,
-        value="other",
-        border_color=BRAND_YELLOW,
-        hover_color=BRAND_YELLOW_HOVER,
-        fg_color=BRAND_YELLOW,
-    ).pack(anchor="w", pady=3)
+    ).pack(anchor="w", pady=4)
 
     # --- СЕКЦИЯ 7: Папка для сохранения документов ---
     f7 = self.create_card("7. Папка для сохранения документов")
@@ -467,34 +472,46 @@ class ModernContractApp(ctk.CTk):
     )
     btn_set_default.pack(side="left")
 
-    # ЖЕЛТЫЕ КНОПКИ ДЕЙСТВИЙ ВНИЗУ
+    # КНОПКИ ДЕЙСТВИЙ ВНИЗУ
     btn_frame = ctk.CTkFrame(self.scroll_frame, fg_color="transparent")
     btn_frame.pack(fill="x", padx=10, pady=20)
-    btn_frame.grid_columnconfigure((0, 1), weight=1)
+    btn_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
     save_btn = ctk.CTkButton(
         btn_frame,
         text="💾 Сохранить договор",
         height=45,
-        font=ctk.CTkFont(size=14, weight="bold"),
+        font=ctk.CTkFont(size=13, weight="bold"),
         fg_color=BRAND_YELLOW,
         hover_color=BRAND_YELLOW_HOVER,
         text_color=TEXT_DARK,
         command=self.generate_doc,
     )
-    save_btn.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+    save_btn.grid(row=0, column=0, sticky="ew", padx=(0, 6))
 
     print_btn = ctk.CTkButton(
         btn_frame,
         text="🖨️ Сохранить и на печать",
         height=45,
-        font=ctk.CTkFont(size=14, weight="bold"),
+        font=ctk.CTkFont(size=13, weight="bold"),
         fg_color=BRAND_YELLOW,
         hover_color=BRAND_YELLOW_HOVER,
         text_color=TEXT_DARK,
         command=self.print_doc,
     )
-    print_btn.grid(row=0, column=1, sticky="ew", padx=(10, 0))
+    print_btn.grid(row=0, column=1, sticky="ew", padx=6)
+
+    reset_btn = ctk.CTkButton(
+        btn_frame,
+        text="🗑️ Стереть всё",
+        height=45,
+        font=ctk.CTkFont(size=13, weight="bold"),
+        fg_color="#c0392b",
+        hover_color="#962d22",
+        text_color="#ffffff",
+        command=self.reset_form,
+    )
+    reset_btn.grid(row=0, column=2, sticky="ew", padx=(6, 0))
 
   def toggle_client_type(self):
     ctype = self.client_type_var.get()
@@ -505,12 +522,51 @@ class ModernContractApp(ctk.CTk):
       self.fiz_frame.pack_forget()
       self.ur_frame.pack(fill="x", expand=True)
 
+  def reset_form(self):
+    all_entries = [
+        self.e_contract_num,
+        self.e_fio,
+        self.e_passport_series,
+        self.e_passport_num,
+        self.e_inn_fiz,
+        self.e_passport_issued,
+        self.e_passport_code,
+        self.e_address,
+        self.e_org_name,
+        self.e_director,
+        self.e_rs,
+        self.e_ks,
+        self.e_bik,
+        self.e_inn_ur,
+        self.e_kpp,
+        self.e_bank,
+        self.e_legal_address,
+        self.e_phone,
+        self.e_email,
+        self.e_engine_model,
+        self.e_engine_num,
+        self.e_car_brand,
+        self.e_car_model,
+        self.e_car_gosnum,
+        self.e_price,
+    ]
+
+    for ent in all_entries:
+      ent.delete(0, tk.END)
+
+    self.e_contract_date.delete(0, tk.END)
+    today_str = datetime.date.today().strftime("%d.%m.%Y")
+    self.e_contract_date.insert(0, today_str)
+
+    self.client_type_var.set("fiz")
+    self.toggle_client_type()
+
+    self.service_var.set("other")
+
   def choose_directory(self):
     initial_dir = self.current_output_dir.get()
     if not os.path.exists(initial_dir):
-      initial_dir = (
-          os.getenv("APPDATA") or os.path.expanduser("~")
-      )
+      initial_dir = os.getenv("APPDATA") or os.path.expanduser("~")
 
     new_dir = filedialog.askdirectory(
         title="Выберите папку для сохранения договора", initialdir=initial_dir
@@ -523,9 +579,7 @@ class ModernContractApp(ctk.CTk):
   def set_as_default_directory(self):
     initial_dir = self.current_output_dir.get()
     if not os.path.exists(initial_dir):
-      initial_dir = (
-          os.getenv("APPDATA") or os.path.expanduser("~")
-      )
+      initial_dir = os.getenv("APPDATA") or os.path.expanduser("~")
 
     new_dir = filedialog.askdirectory(
         title="Выберите общую корневую папку по умолчанию",
@@ -540,39 +594,50 @@ class ModernContractApp(ctk.CTk):
           "Успех", f"Корневая папка по умолчанию успешно сохранена:\n{new_dir}"
       )
 
+  def get_field_val(self, entry_widget):
+    val = entry_widget.get().strip()
+    return val if val else BLANK_LINE
+
   def validate_and_collect_data(self):
     ctype = self.client_type_var.get()
     price_val = self.e_price.get().strip()
-    price_words = number_to_words_ru(price_val)
+    price_words = (
+        number_to_words_ru(price_val) if price_val else BLANK_LINE
+    )
     raw_date = self.e_contract_date.get().strip()
     formatted_date = format_date_with_month_name(raw_date)
 
+    # Правильное склонение месяцев в зависимости от выбранного срока
     if self.service_var.get() == "our":
       g_months, g_months_words, g_km, g_km_words, g_place = (
-          "6",
-          "шесть",
+          "6 месяцев",
+          "шесть месяцев",
           "30 000",
           "тридцать тысяч",
           "в сертифицированном сервисе Продавца",
       )
     else:
       g_months, g_months_words, g_km, g_km_words, g_place = (
-          "3",
-          "три",
+          "3 месяца",
+          "три месяца",
           "20 000",
           "двадцать тысяч",
           "в стороннем автосервисе",
       )
 
+    contract_num_val = self.e_contract_num.get().strip()
+
     data = {
-        "contract_num": self.e_contract_num.get().strip(),
+        "contract_num": (
+            contract_num_val if contract_num_val else BLANK_LINE
+        ),
         "contract_date": formatted_date,
-        "engine_model": self.e_engine_model.get().strip(),
-        "engine_num": self.e_engine_num.get().strip(),
-        "car_brand": self.e_car_brand.get().strip(),
-        "car_model": self.e_car_model.get().strip(),
-        "car_gosnum": self.e_car_gosnum.get().strip(),
-        "price": price_val,
+        "engine_model": self.get_field_val(self.e_engine_model),
+        "engine_num": self.get_field_val(self.e_engine_num),
+        "car_brand": self.get_field_val(self.e_car_brand),
+        "car_model": self.get_field_val(self.e_car_model),
+        "car_gosnum": self.get_field_val(self.e_car_gosnum),
+        "price": price_val if price_val else BLANK_LINE,
         "price_words": price_words,
         "warranty_months": g_months,
         "warranty_months_words": g_months_words,
@@ -600,27 +665,27 @@ class ModernContractApp(ctk.CTk):
         return None
 
       data.update({
-          "fio": self.e_fio.get().strip(),
-          "passport_series": series,
-          "passport_num": number,
-          "passport_issued": self.e_passport_issued.get().strip(),
-          "passport_code": self.e_passport_code.get().strip(),
-          "inn": inn,
-          "address": self.e_address.get().strip(),
+          "fio": self.get_field_val(self.e_fio),
+          "passport_series": series if series else BLANK_LINE,
+          "passport_num": number if number else BLANK_LINE,
+          "passport_issued": self.get_field_val(self.e_passport_issued),
+          "passport_code": self.get_field_val(self.e_passport_code),
+          "inn": inn if inn else BLANK_LINE,
+          "address": self.get_field_val(self.e_address),
       })
     else:
       data.update({
-          "org_name": self.e_org_name.get().strip(),
-          "director_fio": self.e_director.get().strip(),
-          "rs": self.e_rs.get().strip(),
-          "ks": self.e_ks.get().strip(),
-          "bik": self.e_bik.get().strip(),
-          "bank": self.e_bank.get().strip(),
-          "inn": self.e_inn_ur.get().strip(),
-          "kpp": self.e_kpp.get().strip(),
-          "legal_address": self.e_legal_address.get().strip(),
-          "phone": self.e_phone.get().strip(),
-          "email": self.e_email.get().strip(),
+          "org_name": self.get_field_val(self.e_org_name),
+          "director_fio": self.get_field_val(self.e_director),
+          "rs": self.get_field_val(self.e_rs),
+          "ks": self.get_field_val(self.e_ks),
+          "bik": self.get_field_val(self.e_bik),
+          "bank": self.get_field_val(self.e_bank),
+          "inn": self.get_field_val(self.e_inn_ur),
+          "kpp": self.get_field_val(self.e_kpp),
+          "legal_address": self.get_field_val(self.e_legal_address),
+          "phone": self.get_field_val(self.e_phone),
+          "email": self.get_field_val(self.e_email),
       })
 
     return data
@@ -652,11 +717,16 @@ class ModernContractApp(ctk.CTk):
       output_dir = self.current_output_dir.get()
       os.makedirs(output_dir, exist_ok=True)
 
-      safe_num = data["contract_num"].replace("/", "_").replace("\\", "_")
+      raw_num = self.e_contract_num.get().strip()
+      safe_num = (
+          raw_num.replace("/", "_").replace("\\", "_")
+          if raw_num
+          else "БЕЗ_НОМЕРА"
+      )
       name_identifier = (
-          data.get("org_name")
+          self.e_org_name.get().strip()
           if data["client_type"] == "ur"
-          else data.get("fio")
+          else self.e_fio.get().strip()
       )
 
       if name_identifier:
@@ -675,10 +745,24 @@ class ModernContractApp(ctk.CTk):
       )
       return None
 
+  def open_target_folder(self, filename):
+    try:
+      if os.name == "nt":
+        norm_path = os.path.normpath(filename)
+        subprocess.Popen(f'explorer /select,"{norm_path}"')
+      else:
+        os.startfile(os.path.dirname(filename))
+    except Exception:
+      try:
+        os.startfile(os.path.dirname(filename))
+      except Exception:
+        pass
+
   def generate_doc(self):
     filename = self.build_document()
     if filename:
       messagebox.showinfo("Успех", f"Договор успешно сохранен в файл:\n{filename}")
+      self.open_target_folder(filename)
 
   def print_doc(self):
     filename = self.build_document()
@@ -689,6 +773,7 @@ class ModernContractApp(ctk.CTk):
           messagebox.showinfo(
               "Печать", "Документ отправлен на принтер по умолчанию."
           )
+          self.open_target_folder(filename)
         else:
           messagebox.showwarning(
               "Внимание", "Автопечать поддерживается только на Windows."
