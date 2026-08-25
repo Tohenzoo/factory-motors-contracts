@@ -11,6 +11,7 @@ import customtkinter as ctk
 from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
+import webbrowser
 
 CURRENT_VERSION = "v1.0.3"
 REPO_OWNER = "Tohenzoo"
@@ -288,39 +289,15 @@ class ModernContractApp(ctk.CTk):
           )
       else:
         if not self.new_exe_url:
-          messagebox.showinfo(
-              "Обновление", "У вас установлена актуальная версия!"
-          )
-          return
+          # Если прямая ссылка не найдена, открываем страницу последнего релиза
+          direct_url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+        else:
+          # Прямая ссылка на .exe — браузер сразу начнет автоматическую загрузку
+          direct_url = self.new_exe_url
 
-        if messagebox.askyesno(
-            "Обновление",
-            f"Вышло обновление {self.new_version_tag}!\nСкачать и перезапустить"
-            " программу?",
-        ):
-          try:
-            temp_exe = os.path.join(
-                os.getenv("TEMP"), "FM_Contract_Update.exe"
-            )
-            urllib.request.urlretrieve(self.new_exe_url, temp_exe)
+        import webbrowser
 
-            curr_exe = os.path.abspath(sys.executable)
-
-            # Обновление через PowerShell с корректной поддержкой кириллицы
-            ps_script = (
-                f'Start-Sleep -Seconds 2; Move-Item -Force -LiteralPath'
-                f' "{temp_exe}" -Destination "{curr_exe}"; Start-Process'
-                f' -FilePath "{curr_exe}"'
-            )
-            subprocess.Popen(
-                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
-                shell=True,
-            )
-            sys.exit(0)
-          except Exception as e:
-            messagebox.showerror(
-                "Ошибка обновления", f"Не удалось скачать обновление:\n{e}"
-            )
+        webbrowser.open(direct_url)
 
   def create_card(self, title_text):
     card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
