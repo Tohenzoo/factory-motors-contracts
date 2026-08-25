@@ -5,12 +5,17 @@ import subprocess
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import urllib.request
 import customtkinter as ctk
 from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
 
-# Устанавливаем тему
+CURRENT_VERSION = "v1.0.0"
+REPO_OWNER = "Tohenzoo"
+REPO_NAME = "factory-motors-contracts"
+
+# Настройка темы CustomTkinter
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -161,8 +166,25 @@ class ModernContractApp(ctk.CTk):
     )
     lbl_sub.pack(anchor="w", pady=(2, 0))
 
+    # Блок кнопок управления в шапке справа
+    header_btns = ctk.CTkFrame(header_frame, fg_color="transparent")
+    header_btns.pack(side="right", anchor="ne")
+
+    self.update_btn = ctk.CTkButton(
+        header_btns,
+        text="🔄 Обновить приложение",
+        width=165,
+        height=32,
+        font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+        fg_color="#27ae60",
+        hover_color="#219653",
+        text_color="#ffffff",
+        command=self.check_and_update,
+    )
+    self.update_btn.pack(side="left", padx=(0, 10))
+
     self.theme_btn = ctk.CTkButton(
-        header_frame,
+        header_btns,
         text="🌙 Светлая тема",
         width=140,
         height=32,
@@ -172,7 +194,7 @@ class ModernContractApp(ctk.CTk):
         text_color="#ffffff",
         command=self.toggle_theme,
     )
-    self.theme_btn.pack(side="right", anchor="ne")
+    self.theme_btn.pack(side="left")
 
   def toggle_theme(self):
     current = ctk.get_appearance_mode()
@@ -192,6 +214,85 @@ class ModernContractApp(ctk.CTk):
           hover_color="#444444",
           text_color="#ffffff",
       )
+
+  def check_and_update(self):
+    if not getattr(sys, "frozen", False):
+      # Запуск из исходников Python через Git
+      try:
+        result = subprocess.run(
+            ["git", "pull", "origin", "main"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if (
+            "Already up to date" in result.stdout
+            or "Уже обновлено" in result.stdout
+        ):
+          messagebox.showinfo(
+              "Обновление", "У вас установлена последняя версия!"
+          )
+        else:
+          messagebox.showinfo(
+              "Успех", "Обновления загружены. Приложение перезапускается..."
+          )
+          os.execv(sys.executable, ["python"] + sys.argv)
+      except Exception as e:
+        messagebox.showerror(
+            "Ошибка", f"Не удалось обновиться через Git:\n{e}"
+        )
+    else:
+      # Запуск скомпилированного .exe через GitHub Releases
+      try:
+        url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as resp:
+          data = json.loads(resp.read().decode())
+
+        latest_tag = data.get("tag_name", "")
+        if latest_tag and latest_tag != CURRENT_VERSION:
+          exe_url = None
+          for asset in data.get("assets", []):
+            if asset.get("name", "").endswith(".exe"):
+              exe_url = asset.get("browser_download_url")
+              break
+
+          if not exe_url:
+            messagebox.showwarning(
+                "Внимание",
+                "Найден новый релиз, но исполняемый .exe файл не прикреплен к"
+                " релизу.",
+            )
+            return
+
+          if messagebox.askyesno(
+              "Доступно обновление",
+              f"Доступна новая версия {latest_tag}. Скачать и обновить?",
+          ):
+            temp_exe = os.path.join(
+                os.getenv("TEMP"), "Генератор_Договоров_new.exe"
+            )
+            urllib.request.urlretrieve(exe_url, temp_exe)
+
+            curr_exe = sys.executable
+            bat_path = os.path.join(os.getenv("TEMP"), "updater.bat")
+            with open(bat_path, "w", encoding="cp1251") as f:
+              f.write(f"""@echo off
+timeout /t 2 /nobreak > NUL
+move /y "{temp_exe}" "{curr_exe}"
+start "" "{curr_exe}"
+del "%~f0"
+""")
+            subprocess.Popen([bat_path], shell=True)
+            sys.exit(0)
+        else:
+          messagebox.showinfo(
+              "Обновление", "У вас установлена актуальная версия приложения!"
+          )
+      except Exception as e:
+        messagebox.showerror(
+            "Ошибка", f"Не удалось проверить обновления на GitHub:\n{e}"
+        )
 
   def create_card(self, title_text):
     card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
@@ -607,7 +708,6 @@ class ModernContractApp(ctk.CTk):
     raw_date = self.e_contract_date.get().strip()
     formatted_date = format_date_with_month_name(raw_date)
 
-    # Правильное склонение месяцев в зависимости от выбранного срока
     if self.service_var.get() == "our":
       g_months, g_months_words, g_km, g_km_words, g_place = (
           "6 месяцев",
