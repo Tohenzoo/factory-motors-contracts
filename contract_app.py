@@ -12,7 +12,7 @@ from docxtpl import DocxTemplate
 from num2words import num2words
 from PIL import Image
 
-CURRENT_VERSION = "v1.0.1"
+CURRENT_VERSION = "v1.0.3"
 REPO_OWNER = "Tohenzoo"
 REPO_NAME = "factory-motors-contracts"
 
@@ -207,7 +207,7 @@ class ModernContractApp(ctk.CTk):
     if current == "Dark":
       ctk.set_appearance_mode("Light")
       self.theme_btn.configure(
-          text="☀️ Темная тема",
+          text="Темная тема",
           fg_color="#e0e0e0",
           hover_color="#cccccc",
           text_color="#222222",
@@ -215,7 +215,7 @@ class ModernContractApp(ctk.CTk):
     else:
       ctk.set_appearance_mode("Dark")
       self.theme_btn.configure(
-          text="🌙 Светлая тема",
+          text="Светлая тема",
           fg_color="#333333",
           hover_color="#444444",
           text_color="#ffffff",
@@ -270,55 +270,57 @@ class ModernContractApp(ctk.CTk):
     self.update_btn.pack(side="left", padx=(0, 10))
 
   def perform_update(self):
-    if not getattr(sys, "frozen", False):
-      try:
-        subprocess.run(
-            ["git", "pull", "origin", "main"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        messagebox.showinfo(
-            "Успех", "Обновления установлены! Приложение перезапускается..."
-        )
-        os.execv(sys.executable, ["python"] + sys.argv)
-      except Exception as e:
-        messagebox.showerror(
-            "Ошибка", f"Не удалось обновиться через Git:\n{e}"
-        )
-    else:
-      if not self.new_exe_url:
-        messagebox.showinfo(
-            "Обновление", "У вас установлена актуальная версия!"
-        )
-        return
-
-      if messagebox.askyesno(
-          "Обновление",
-          f"Вышло обновление {self.new_version_tag}!\nСкачать и перезапустить"
-          " программу?",
-      ):
+      if not getattr(sys, "frozen", False):
         try:
-          temp_exe = os.path.join(
-              os.getenv("TEMP"), "Генератор_Договоров_new.exe"
+          subprocess.run(
+              ["git", "pull", "origin", "main"],
+              capture_output=True,
+              text=True,
+              check=True,
           )
-          urllib.request.urlretrieve(self.new_exe_url, temp_exe)
-
-          curr_exe = sys.executable
-          bat_path = os.path.join(os.getenv("TEMP"), "updater.bat")
-          with open(bat_path, "w", encoding="cp1251") as f:
-            f.write(f"""@echo off
-timeout /t 2 /nobreak > NUL
-move /y "{temp_exe}" "{curr_exe}"
-start "" "{curr_exe}"
-del "%~f0"
-""")
-          subprocess.Popen([bat_path], shell=True)
-          sys.exit(0)
+          messagebox.showinfo(
+              "Успех", "Обновления установлены! Приложение перезапускается..."
+          )
+          os.execv(sys.executable, ["python"] + sys.argv)
         except Exception as e:
           messagebox.showerror(
-              "Ошибка обновления", f"Не удалось скачать обновление:\n{e}"
+              "Ошибка", f"Не удалось обновиться через Git:\n{e}"
           )
+      else:
+        if not self.new_exe_url:
+          messagebox.showinfo(
+              "Обновление", "У вас установлена актуальная версия!"
+          )
+          return
+
+        if messagebox.askyesno(
+            "Обновление",
+            f"Вышло обновление {self.new_version_tag}!\nСкачать и перезапустить"
+            " программу?",
+        ):
+          try:
+            temp_exe = os.path.join(
+                os.getenv("TEMP"), "FM_Contract_Update.exe"
+            )
+            urllib.request.urlretrieve(self.new_exe_url, temp_exe)
+
+            curr_exe = os.path.abspath(sys.executable)
+
+            # Обновление через PowerShell с корректной поддержкой кириллицы
+            ps_script = (
+                f'Start-Sleep -Seconds 2; Move-Item -Force -LiteralPath'
+                f' "{temp_exe}" -Destination "{curr_exe}"; Start-Process'
+                f' -FilePath "{curr_exe}"'
+            )
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script],
+                shell=True,
+            )
+            sys.exit(0)
+          except Exception as e:
+            messagebox.showerror(
+                "Ошибка обновления", f"Не удалось скачать обновление:\n{e}"
+            )
 
   def create_card(self, title_text):
     card = ctk.CTkFrame(self.scroll_frame, corner_radius=10, border_width=1)
